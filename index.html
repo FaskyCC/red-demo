@@ -859,13 +859,17 @@ function runLoading(){
     let recog;
     const byName=emotionByFilename(scanFileName);
     if(scanFileName==='__sample__'){
+      console.log('[Pi-Pet] 情绪示例图，跳过AI，用 currentEmotion=', currentEmotion);
       recog=Promise.resolve(currentEmotion);      // 示例图已确定
     }else if(byName){
+      console.log('[Pi-Pet] 情绪文件名匹配:', scanFileName, '->', byName, '（跳过AI）');
       recog=Promise.resolve(byName);              // 文件名含"正向/负向"等 -> 直接用，不依赖AI
     }else{
+      console.log('[Pi-Pet] 调用 GLM AI 情绪识别中… scanFileName=', JSON.stringify(scanFileName));
+      setBubbleStatus('🤖 正在调用 GLM AI 分析情绪…');
       recog=glmEmotion(scanImageData)
-        .then(t=> t || 'positive')
-        .catch(err=>{ console.warn('GLM 情绪识别失败，回退：',err); return 'positive'; });
+        .then(t=>{ console.log('[Pi-Pet] GLM 情绪返回:', t); setBubbleStatus('✅ 情绪分析完成：'+(t||'positive')); return t || 'positive'; })
+        .catch(err=>{ console.error('[Pi-Pet] GLM 情绪识别失败，回退：',err); setBubbleStatus('❌ AI 调用失败：'+err.message); return 'positive'; });
     }
     Promise.all([recog,minD]).then(([t])=>{ clearInterval(dt); currentEmotion=t||'positive'; renderEmotion(); });
     return;
@@ -876,19 +880,40 @@ function runLoading(){
   let recognize;
   const caseByName=matchByFilename(scanFileName);
   if(scanFileName==='__sample__'){
+    console.log('[Pi-Pet] 示例图，跳过AI识别，直接用 currentCase=', currentCase);
     recognize=Promise.resolve(currentCase);         // 示例图已确定，跳过AI
   }else if(caseByName){
+    console.log('[Pi-Pet] 文件名匹配命中:', scanFileName, '->', caseByName, '（跳过AI）');
     recognize=Promise.resolve(caseByName);          // 文件名含病症关键词 -> 直接用
   }else{
+    console.log('[Pi-Pet] 调用 GLM AI 识别中… scanFileName=', JSON.stringify(scanFileName));
+    setBubbleStatus('🤖 正在调用 GLM AI 识别…');
     recognize=glmClassify(scanImageData)
-      .then(key=> key || hashToCase(scanImageData)) // AI 命中用AI，other则哈希兜底
-      .catch(err=>{ console.warn('GLM 识别失败，回退兜底：', err); return hashToCase(scanImageData); });
+      .then(key=>{
+        console.log('[Pi-Pet] GLM 返回:', key);
+        if(key){ setBubbleStatus('✅ AI 识别完成：'+key); return key; }
+        console.warn('[Pi-Pet] GLM 返回 other/空，走哈希兜底');
+        setBubbleStatus('⚠️ AI 未识别出部位，用兜底');
+        return hashToCase(scanImageData);
+      })
+      .catch(err=>{
+        console.error('[Pi-Pet] GLM 识别失败，回退兜底：', err);
+        setBubbleStatus('❌ AI 调用失败：'+err.message);
+        return hashToCase(scanImageData);
+      });
   }
   Promise.all([recognize, minDelay]).then(([key])=>{
     clearInterval(dt);
     currentCase = key || 'ear';
     renderReport();
   });
+}
+// 在加载页追加一条状态气泡
+function setBubbleStatus(text){
+  const box=document.getElementById('bubbles'); if(!box) return;
+  let el=document.getElementById('aiStatusBubble');
+  if(!el){ el=document.createElement('div'); el.id='aiStatusBubble'; el.className='bubble'; el.style.marginLeft='40px'; box.appendChild(el); }
+  el.innerHTML='<span class="ic">🤖</span>'+text;
 }
 
 /* ===================== 健康报告 ===================== */
