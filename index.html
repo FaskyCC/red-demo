@@ -204,7 +204,7 @@
         <button class="btn btn-ghost" onclick="document.getElementById('file').click()">上传照片</button>
       </div>
       <div class="btn-row">
-        <button class="btn btn-primary btn-block" id="scanBtn" onclick="startScan()" disabled>🔍 开始 AI 轻诊断</button>
+        <button class="btn btn-primary btn-block" id="scanBtn" onclick="startScan()">🔍 开始 AI 轻诊断（示例）</button>
       </div>
       <input type="file" id="file" accept="image/*" style="display:none" onchange="onFile(event)">
     </div>
@@ -542,7 +542,12 @@ function renderParts(){
   });
 }
 function updateScanBtn(){
-  document.getElementById('scanBtn').disabled = !(hasImage && currentPart);
+  // Demo 演示友好：按钮始终可点，startScan 内部会兜底处理缺图片/未选部位的情况
+  const btn=document.getElementById('scanBtn');
+  btn.disabled=false;
+  btn.textContent = (hasImage && currentPart) ? '🔍 开始 AI 轻诊断'
+                  : currentPart ? '🔍 开始 AI 轻诊断（可先拍照）'
+                  : '🔍 开始 AI 轻诊断（示例）';
 }
 
 /* ================= 摄像头 & 图片 ================= */
@@ -614,7 +619,10 @@ function diagnose(part){
 }
 
 function startScan(){
-  if(!hasImage||!currentPart) return;
+  // 降低体验门槛：未选部位则自动选第一个；未拍照也允许出模拟结果
+  if(!currentPart){ currentPart=PARTS[0]; renderParts(); document.getElementById('partTag').textContent='扫描'+currentPart.name; }
+  if(!hasImage){ toast('未检测到照片，先展示示例诊断'); }
+
   const stage=document.getElementById('stage');
   const btn=document.getElementById('scanBtn');
   stage.classList.add('scanning');
@@ -625,6 +633,7 @@ function startScan(){
     const diag=diagnose(currentPart);
     lastDiag=diag;
     renderResult(diag);
+    document.getElementById('result').style.display='block'; // 关键：展示结果区
     stage.classList.remove('scanning');
     btn.disabled=false; btn.textContent='🔍 重新诊断';
     document.getElementById('result').scrollIntoView({behavior:'smooth',block:'start'});
@@ -781,7 +790,7 @@ function toast(msg){
 window.addEventListener('beforeunload', stopCam);
 
 /* init */
-renderPet(); renderParts(); renderTimeline();
+renderPet(); renderParts(); renderTimeline(); updateScanBtn();
 </script>
 </body>
 </html>
