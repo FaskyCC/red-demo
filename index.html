@@ -2,272 +2,786 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>摄像头调用 Demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<title>喵汪CT机 🔍</title>
 <style>
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    padding: 16px;
-    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-    background: #111;
-    color: #eee;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
+  :root{
+    --bg:#f6f7fb; --card:#fff; --ink:#1a1a2e; --sub:#8a8fa3;
+    --brand:#ff2e4d; --brand-soft:#ffe8ec;
+    --green:#12b76a; --green-soft:#e7f8f0;
+    --amber:#f79009; --amber-soft:#fef3e6;
+    --red:#f04438; --red-soft:#fee4e2;
+    --line:#eef0f5; --shadow:0 6px 24px rgba(20,20,40,.08);
+    --radius:18px;
   }
-  h1 {
-    font-size: 18px;
-    margin: 8px 0 16px;
-    text-align: center;
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.5;
+    max-width:520px; margin:0 auto; min-height:100vh;
+    padding-bottom:88px;
   }
-  .video-wrap {
-    position: relative;
-    width: 100%;
-    max-width: 480px;
-    aspect-ratio: 3 / 4;
-    background: #000;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid #333;
+  .app-header{
+    position:sticky; top:0; z-index:50;
+    background:linear-gradient(135deg,#ff2e4d,#ff6b6b);
+    color:#fff; padding:16px 18px 18px; border-radius:0 0 22px 22px;
+    box-shadow:0 6px 20px rgba(255,46,77,.25);
   }
-  video, canvas, #photo {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
+  .app-header .brand{display:flex;align-items:center;gap:8px;font-size:20px;font-weight:800;}
+  .app-header .slogan{font-size:12.5px;opacity:.92;margin-top:4px;}
+  .pet-chip{
+    margin-top:12px; background:rgba(255,255,255,.18); backdrop-filter:blur(4px);
+    border-radius:14px; padding:10px 12px; display:flex;align-items:center;gap:10px;
+    cursor:pointer;
   }
-  #photo { display: none; background: #000; }
-  .hint {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #aaa;
-    font-size: 14px;
-    padding: 20px;
-    text-align: center;
+  .pet-chip .avatar{width:38px;height:38px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;flex:0 0 auto;}
+  .pet-chip .info{flex:1;min-width:0;}
+  .pet-chip .info .name{font-weight:700;font-size:14px;}
+  .pet-chip .info .meta{font-size:11.5px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pet-chip .edit{font-size:12px;opacity:.9;}
+
+  .section{padding:16px 16px 0;}
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;}
+  .card + .card{margin-top:14px;}
+  .card-title{font-size:15px;font-weight:800;margin:0 0 12px;display:flex;align-items:center;gap:6px;}
+  .card-title .tag{font-size:11px;font-weight:600;color:var(--sub);background:var(--line);padding:2px 8px;border-radius:20px;margin-left:auto;}
+
+  /* 摄像头/图片区 */
+  .stage{
+    position:relative;width:100%;aspect-ratio:1/1;background:#0d0d14;border-radius:16px;overflow:hidden;
   }
-  .controls {
-    width: 100%;
-    max-width: 480px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 16px;
-    justify-content: center;
-  }
-  button {
-    flex: 1 1 auto;
-    min-width: 100px;
-    padding: 12px 16px;
-    font-size: 14px;
-    border: none;
-    border-radius: 8px;
-    background: #2d7dfd;
-    color: #fff;
-    cursor: pointer;
-    transition: opacity .15s;
-  }
-  button:active { opacity: 0.7; }
-  button:disabled {
-    background: #444;
-    color: #888;
-    cursor: not-allowed;
-  }
-  button.secondary { background: #333; }
-  button.danger { background: #d64545; }
-  .status {
-    margin-top: 12px;
-    font-size: 13px;
-    color: #999;
-    max-width: 480px;
-    text-align: center;
-    word-break: break-all;
-  }
-  a#download {
-    display: none;
-  }
+  video,#shot{width:100%;height:100%;object-fit:cover;display:block;}
+  #shot{display:none;}
+  .stage-hint{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#c9cbd6;gap:10px;padding:24px;text-align:center;}
+  .stage-hint .big{font-size:44px;}
+  .scan-frame{position:absolute;inset:14%;border:2px solid rgba(255,255,255,.5);border-radius:14px;pointer-events:none;display:none;}
+  .scan-frame::before,.scan-frame::after{content:"";position:absolute;width:22px;height:22px;border:3px solid var(--brand);}
+  .scan-frame::before{top:-2px;left:-2px;border-right:0;border-bottom:0;border-radius:8px 0 0 0;}
+  .scan-frame::after{bottom:-2px;right:-2px;border-left:0;border-top:0;border-radius:0 0 8px 0;}
+  .scan-line{position:absolute;left:14%;right:14%;height:2px;background:linear-gradient(90deg,transparent,#ff2e4d,transparent);top:14%;display:none;box-shadow:0 0 10px #ff2e4d;}
+  .stage.scanning .scan-frame,.stage.scanning .scan-line{display:block;}
+  .stage.scanning .scan-line{animation:scan 1.6s ease-in-out infinite;}
+  @keyframes scan{0%{top:16%}50%{top:82%}100%{top:16%}}
+
+  /* 部位选择 */
+  .parts{display:flex;gap:8px;overflow-x:auto;padding:12px 0 2px;-ms-overflow-style:none;scrollbar-width:none;}
+  .parts::-webkit-scrollbar{display:none;}
+  .part{flex:0 0 auto;padding:8px 14px;border-radius:20px;background:var(--bg);border:1.5px solid var(--line);font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px;transition:.15s;}
+  .part.active{background:var(--brand-soft);border-color:var(--brand);color:var(--brand);font-weight:700;}
+
+  .btn-row{display:flex;gap:10px;margin-top:12px;}
+  .btn{flex:1;padding:13px;border:none;border-radius:13px;font-size:14.5px;font-weight:700;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center;gap:6px;}
+  .btn:active{transform:scale(.97);}
+  .btn-primary{background:var(--brand);color:#fff;box-shadow:0 6px 16px rgba(255,46,77,.3);}
+  .btn-ghost{background:var(--bg);color:var(--ink);border:1.5px solid var(--line);}
+  .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;}
+  .btn-block{width:100%;}
+
+  /* 诊断结果 */
+  #result{display:none;}
+  .risk-banner{border-radius:16px;padding:16px;color:#fff;position:relative;overflow:hidden;}
+  .risk-banner .lvl{font-size:12px;opacity:.9;letter-spacing:1px;}
+  .risk-banner .txt{font-size:20px;font-weight:800;margin-top:2px;}
+  .risk-banner .desc{font-size:13px;opacity:.95;margin-top:6px;}
+  .risk-banner .emoji{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:48px;opacity:.28;}
+  .risk-low{background:linear-gradient(135deg,#12b76a,#36d399);}
+  .risk-mid{background:linear-gradient(135deg,#f79009,#fdb022);}
+  .risk-high{background:linear-gradient(135deg,#f04438,#ff6b6b);}
+
+  .conf{margin-top:12px;}
+  .conf .bar{height:8px;background:var(--line);border-radius:8px;overflow:hidden;margin-top:6px;}
+  .conf .bar > i{display:block;height:100%;border-radius:8px;background:linear-gradient(90deg,#ff2e4d,#ff9a6b);width:0;transition:width 1s ease;}
+  .conf .cap{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);}
+
+  .kv{margin-top:8px;}
+  .kv .row{display:flex;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13.5px;}
+  .kv .row:last-child{border-bottom:0;}
+  .kv .row .k{color:var(--sub);flex:0 0 74px;}
+  .kv .row .v{flex:1;}
+
+  .cause{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;background:var(--bg);margin-top:8px;}
+  .cause .pct{font-weight:800;font-size:15px;color:var(--brand);flex:0 0 46px;text-align:center;}
+  .cause .cbar{flex:1;}
+  .cause .cbar .nm{font-size:13.5px;font-weight:600;}
+  .cause .cbar .ln{height:6px;background:var(--line);border-radius:6px;margin-top:4px;overflow:hidden;}
+  .cause .cbar .ln>i{display:block;height:100%;background:var(--brand);border-radius:6px;}
+
+  .checklist li{list-style:none;padding:9px 0 9px 28px;position:relative;font-size:13.5px;border-bottom:1px dashed var(--line);}
+  .checklist li:last-child{border-bottom:0;}
+  .checklist li::before{content:"✓";position:absolute;left:2px;top:9px;color:var(--green);font-weight:800;}
+  .checklist.warn li::before{content:"⚠️";left:0;font-size:13px;}
+
+  .action-card{border:1.5px solid var(--line);border-radius:14px;padding:12px;margin-top:10px;}
+  .action-card .h{font-size:13px;font-weight:800;display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+
+  /* 小红书笔记 */
+  .notes{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .note{background:var(--bg);border-radius:14px;overflow:hidden;cursor:pointer;transition:.15s;}
+  .note:active{transform:scale(.97);}
+  .note .cover{height:96px;display:flex;align-items:center;justify-content:center;font-size:40px;background:linear-gradient(135deg,#ffe8ec,#fff0f3);}
+  .note .body{padding:8px 9px 10px;}
+  .note .ttl{font-size:12.5px;font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px;}
+  .note .foot{display:flex;align-items:center;gap:5px;margin-top:7px;font-size:11px;color:var(--sub);}
+  .note .foot .who{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .note .foot .like{color:var(--brand);}
+  .badge-pro{display:inline-block;background:var(--brand);color:#fff;font-size:10px;padding:1px 6px;border-radius:20px;margin-right:4px;font-weight:600;}
+
+  /* 时间线 */
+  .timeline{position:relative;padding-left:22px;}
+  .timeline::before{content:"";position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:var(--line);}
+  .tl-item{position:relative;padding:0 0 16px;}
+  .tl-item:last-child{padding-bottom:0;}
+  .tl-item::before{content:"";position:absolute;left:-19px;top:3px;width:11px;height:11px;border-radius:50%;background:var(--brand);border:2px solid #fff;box-shadow:0 0 0 2px var(--brand-soft);}
+  .tl-item .date{font-size:11.5px;color:var(--sub);}
+  .tl-item .tt{font-size:13.5px;font-weight:600;margin-top:2px;}
+  .tl-empty{color:var(--sub);font-size:13px;text-align:center;padding:16px 0;}
+
+  /* 弹窗 */
+  .mask{position:fixed;inset:0;background:rgba(20,20,40,.5);display:none;align-items:flex-end;justify-content:center;z-index:100;}
+  .mask.show{display:flex;}
+  .sheet{background:#fff;width:100%;max-width:520px;border-radius:22px 22px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto;animation:up .25s ease;}
+  @keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .sheet h3{margin:0 0 16px;font-size:17px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12.5px;color:var(--sub);margin-bottom:6px;}
+  .field input,.field select,.field textarea{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:12px;font-size:14px;font-family:inherit;background:#fafbfc;}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--brand);}
+  .seg{display:flex;gap:8px;}
+  .seg .opt{flex:1;text-align:center;padding:11px;border:1.5px solid var(--line);border-radius:12px;font-size:14px;cursor:pointer;background:#fafbfc;}
+  .seg .opt.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:700;}
+
+  .toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:rgba(20,20,40,.9);color:#fff;padding:10px 18px;border-radius:24px;font-size:13px;z-index:200;opacity:0;transition:.25s;pointer-events:none;white-space:nowrap;}
+  .toast.show{opacity:1;bottom:112px;}
+
+  .tabbar{position:fixed;bottom:0;left:0;right:0;max-width:520px;margin:0 auto;background:#fff;border-top:1px solid var(--line);display:flex;padding:8px 0 calc(8px + env(safe-area-inset-bottom));z-index:60;}
+  .tabbar .tab{flex:1;text-align:center;font-size:11px;color:var(--sub);cursor:pointer;}
+  .tabbar .tab .ic{font-size:21px;display:block;}
+  .tabbar .tab.on{color:var(--brand);font-weight:700;}
+
+  .disclaimer{font-size:11px;color:var(--sub);text-align:center;padding:16px 20px 4px;line-height:1.6;}
+  .thinking{display:flex;align-items:center;gap:8px;color:var(--sub);font-size:13px;justify-content:center;padding:8px;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--brand);animation:blink 1.2s infinite;}
+  .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+  .page{display:none;} .page.on{display:block;}
 </style>
 </head>
 <body>
 
-  <h1>📷 摄像头调用 Demo</h1>
-
-  <div class="video-wrap">
-    <video id="video" autoplay playsinline muted></video>
-    <img id="photo" alt="拍摄的照片">
-    <div class="hint" id="hint">点击下方"打开摄像头"开始</div>
+<div class="app-header">
+  <div class="brand">🔍 喵汪CT机</div>
+  <div class="slogan">担心毛孩子健康？先别急，掏出喵汪CT机扫一扫！</div>
+  <div class="pet-chip" onclick="openPetSheet()">
+    <div class="avatar" id="petAvatar">🐱</div>
+    <div class="info">
+      <div class="name" id="petName">点点</div>
+      <div class="meta" id="petMeta">英短 · 1岁 · 4.2kg · 已绝育</div>
+    </div>
+    <div class="edit">档案 ›</div>
   </div>
+</div>
 
-  <canvas id="canvas" style="display:none;"></canvas>
+<!-- 扫描页 -->
+<div class="page on" id="page-scan">
+  <div class="section">
+    <div class="card">
+      <div class="card-title">📷 AI 扫描 <span class="tag" id="partTag">未选择部位</span></div>
+      <div class="stage" id="stage">
+        <video id="video" autoplay playsinline muted></video>
+        <img id="shot" alt="拍摄照片">
+        <div class="scan-frame"></div><div class="scan-line"></div>
+        <div class="stage-hint" id="stageHint">
+          <div class="big">🐾</div>
+          <div>对准毛孩子的异常部位<br>点击下方开启摄像头或上传照片</div>
+        </div>
+      </div>
 
-  <div class="controls">
-    <button id="startBtn">打开摄像头</button>
-    <button id="switchBtn" class="secondary" disabled>切换前/后摄像头</button>
-    <button id="captureBtn" class="secondary" disabled>拍照</button>
-    <button id="retakeBtn" class="secondary" style="display:none;">重新拍摄</button>
-    <button id="downloadBtn" class="secondary" style="display:none;">下载照片</button>
-    <button id="stopBtn" class="danger" disabled>关闭摄像头</button>
+      <div class="parts" id="parts"></div>
+
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="camBtn" onclick="toggleCam()">开启摄像头</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('file').click()">上传照片</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-block" id="scanBtn" onclick="startScan()" disabled>🔍 开始 AI 轻诊断</button>
+      </div>
+      <input type="file" id="file" accept="image/*" style="display:none" onchange="onFile(event)">
+    </div>
+
+    <!-- 诊断结果 -->
+    <div id="result">
+      <div class="card">
+        <div class="card-title">🩺 健康初筛卡 <span class="tag">AI 分析</span></div>
+        <div class="risk-banner" id="riskBanner">
+          <div class="lvl" id="riskLvl">风险等级</div>
+          <div class="txt" id="riskTxt">—</div>
+          <div class="desc" id="riskDesc">—</div>
+          <div class="emoji" id="riskEmoji">🩺</div>
+        </div>
+
+        <div class="conf">
+          <div class="cap"><span>AI 置信度</span><span id="confPct">0%</span></div>
+          <div class="bar"><i id="confBar"></i></div>
+        </div>
+
+        <div style="margin-top:14px;font-size:13px;font-weight:800;">🔎 发现的异常特征</div>
+        <div class="kv" id="findings"></div>
+
+        <div style="margin-top:14px;font-size:13px;font-weight:800;">📋 可能相关的常见原因</div>
+        <div id="causes"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎯 下一步行动卡</div>
+        <div class="action-card">
+          <div class="h">👀 需要继续观察的指标</div>
+          <ul class="checklist" id="observe"></ul>
+        </div>
+        <div class="action-card" style="border-color:var(--amber);background:var(--amber-soft);">
+          <div class="h">🚨 危险信号（出现请立即就医）</div>
+          <ul class="checklist warn" id="danger"></ul>
+        </div>
+        <div class="action-card" style="border-color:var(--brand);">
+          <div class="h">✅ 建议采取的行动</div>
+          <ul class="checklist" id="todos"></ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📕 同症经验匹配 <span class="tag">来自小红书</span></div>
+        <div style="font-size:12px;color:var(--sub);margin:-6px 0 12px;">已为「<b id="matchPet"></b>」匹配更相似的真实案例</div>
+        <div class="notes" id="notes"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📝 就诊 & 求助</div>
+        <button class="btn btn-ghost btn-block" onclick="genHelpNote()">🙋 一键生成求助/康复笔记</button>
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="genVetSummary()">📄 生成给兽医的摘要</button>
+          <button class="btn btn-primary" onclick="saveRecord()">💾 存入健康档案</button>
+        </div>
+      </div>
+    </div>
   </div>
+</div>
 
-  <div class="status" id="status"></div>
-  <a id="download" download="photo.png"></a>
+<!-- 档案页 -->
+<div class="page" id="page-archive">
+  <div class="section">
+    <div class="card">
+      <div class="card-title">🗂 健康档案时间线 <span class="tag" id="recCount">0 条</span></div>
+      <div class="timeline" id="timeline"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 健康小结</div>
+      <div class="kv" id="summary"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 底部导航 -->
+<div class="tabbar">
+  <div class="tab on" data-page="scan" onclick="switchPage('scan')"><span class="ic">🔍</span>扫一扫</div>
+  <div class="tab" data-page="archive" onclick="switchPage('archive')"><span class="ic">🗂</span>健康档案</div>
+</div>
+
+<div class="disclaimer">
+  ⚠️ 喵汪CT机提供的是健康初筛参考，不能替代专业兽医诊断。<br>如出现危险信号或病情加重，请立即前往正规宠物医院。
+</div>
+
+<!-- 宠物档案弹窗 -->
+<div class="mask" id="petMask">
+  <div class="sheet">
+    <h3>🐾 毛孩子档案</h3>
+    <div class="field"><label>昵称</label><input id="f-name" placeholder="给毛孩子起个名字"></div>
+    <div class="field"><label>物种</label>
+      <div class="seg" id="f-species">
+        <div class="opt on" data-v="猫">🐱 猫</div>
+        <div class="opt" data-v="狗">🐶 狗</div>
+      </div>
+    </div>
+    <div class="field"><label>品种</label><input id="f-breed" placeholder="如 英短 / 金毛 / 中华田园"></div>
+    <div class="btn-row" style="margin:0 0 14px;">
+      <div class="field" style="flex:1;margin:0;"><label>年龄(岁)</label><input id="f-age" type="number" step="0.1" placeholder="1"></div>
+      <div class="field" style="flex:1;margin:0;"><label>体重(kg)</label><input id="f-weight" type="number" step="0.1" placeholder="4.2"></div>
+    </div>
+    <div class="field"><label>是否绝育</label>
+      <div class="seg" id="f-neuter">
+        <div class="opt on" data-v="已绝育">已绝育</div>
+        <div class="opt" data-v="未绝育">未绝育</div>
+      </div>
+    </div>
+    <div class="field"><label>既往病史 / 备注</label><textarea id="f-history" rows="2" placeholder="如：曾患耳螨、对某食物过敏…（选填）"></textarea></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closePetSheet()">取消</button>
+      <button class="btn btn-primary" onclick="savePet()">保存档案</button>
+    </div>
+  </div>
+</div>
+
+<!-- 求助笔记弹窗 -->
+<div class="mask" id="noteMask">
+  <div class="sheet">
+    <h3 id="noteSheetTitle">🙋 求助笔记</h3>
+    <div class="field"><textarea id="noteContent" rows="12" style="line-height:1.7;"></textarea></div>
+    <div style="font-size:11px;color:var(--sub);margin:-6px 0 12px;">已自动隐去敏感信息，可编辑后复制分享到小红书求助</div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeNote()">关闭</button>
+      <button class="btn btn-primary" onclick="copyNote()">📋 复制内容</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
 
 <script>
-(function () {
-  const video = document.getElementById('video');
-  const photo = document.getElementById('photo');
-  const canvas = document.getElementById('canvas');
-  const hint = document.getElementById('hint');
-  const statusEl = document.getElementById('status');
+/* ================= 数据层 ================= */
+const PARTS = [
+  {id:'ear',   name:'耳朵',   icon:'👂'},
+  {id:'skin',  name:'皮肤',   icon:'🩹'},
+  {id:'eye',   name:'眼睛',   icon:'👁'},
+  {id:'teeth', name:'牙齿',   icon:'🦷'},
+  {id:'poop',  name:'排泄物', icon:'💩'},
+  {id:'paw',   name:'爪子',   icon:'🐾'},
+];
 
-  const startBtn = document.getElementById('startBtn');
-  const switchBtn = document.getElementById('switchBtn');
-  const captureBtn = document.getElementById('captureBtn');
-  const retakeBtn = document.getElementById('retakeBtn');
-  const downloadBtn = document.getElementById('downloadBtn');
-  const stopBtn = document.getElementById('stopBtn');
-  const downloadLink = document.getElementById('download');
+/* 内置智能模拟诊断库：按部位给出典型病例。真实接入时替换 diagnose() 即可 */
+const DIAG_DB = {
+  ear:{
+    level:'mid', title:'耳道异常 · 疑似耳螨', emoji:'👂',
+    desc:'检测到耳道内深色分泌物与轻度红肿，与耳螨/外耳炎特征较吻合',
+    conf:82,
+    findings:[
+      ['异常特征','耳道内黑褐色咖啡渣样分泌物'],
+      ['伴随表现','耳廓轻度发红、疑似频繁抓挠'],
+      ['部位','左/右耳道口'],
+    ],
+    causes:[[68,'耳螨（耳痒螨感染）'],[22,'马拉色菌性外耳炎'],[10,'耵聍腺分泌旺盛/耳垢堆积']],
+    observe:['抓挠耳朵和甩头的频率（次/天）','分泌物颜色是否变黄变脓','耳道是否有异味加重','是否出现歪头、失去平衡'],
+    danger:['耳道流脓、出血或明显恶臭','宠物剧烈疼痛、拒绝触碰头部','出现歪头、转圈、平衡失调'],
+    todos:['先用宠物专用洁耳液做基础清洁，避免掏耳','拍照记录分泌物，每天对比变化','48小时内无改善或加重，尽快就医做耳道镜/镜检','确诊后遵医嘱使用滴耳药，通常需连续用药'],
+    notes:[
+      {pro:true, icon:'🩺', ttl:'猫咪耳螨科普：黑褐色耳垢一定是耳螨吗？',who:'萌宠医师阿橘',like:'3.2w'},
+      {pro:false,icon:'🐱', ttl:'点点确诊耳螨全记录，从清洁到用药7天恢复',who:'新手铲屎官日记',like:'8621'},
+      {pro:false,icon:'🧴', ttl:'亲测有效｜猫咪洁耳液正确使用姿势（附步骤）',who:'两只猫的日常',like:'1.5w'},
+      {pro:true, icon:'⚕️', ttl:'外耳炎 vs 耳螨怎么区分？兽医手把手教你',who:'宠物皮肤科Dr.Lee',like:'6789'},
+    ],
+  },
+  skin:{
+    level:'mid', title:'皮肤异常 · 疑似过敏/皮炎', emoji:'🩹',
+    desc:'检测到局部脱毛与皮肤发红，与过敏性皮炎/真菌感染特征相关',
+    conf:76,
+    findings:[
+      ['异常特征','局部脱毛、皮肤发红'],
+      ['伴随表现','可能伴皮屑、结痂或瘙痒'],
+      ['分布','局灶性，边界待观察'],
+    ],
+    causes:[[45,'过敏性皮炎（食物/环境）'],[33,'真菌感染（猫癣等）'],[22,'跳蚤/寄生虫叮咬']],
+    observe:['脱毛区域是否扩大','是否频繁舔舐、啃咬患处','皮屑/结痂是否增多','家中其他宠物或人是否出现类似症状'],
+    danger:['皮损快速扩散、大面积渗液流脓','宠物精神萎靡、食欲明显下降','人也出现环形红疹（警惕人畜共患）'],
+    todos:['戴伊丽莎白圈防止舔舐加重','保持患处清洁干燥，避免自行涂抹人用药膏','怀疑猫癣需隔离并做伍德氏灯/真菌培养','就医做皮肤刮片以明确病因'],
+    notes:[
+      {pro:true, icon:'🔬', ttl:'猫癣早期长啥样？3张对比图教你识别',who:'皮肤科宠医王医生',like:'2.1w'},
+      {pro:false,icon:'🐈', ttl:'猫咪过敏性皮炎护理经验，换粮后明显好转',who:'橘座的康复路',like:'9234'},
+      {pro:false,icon:'💊', ttl:'猫癣28天治愈记录｜用药+环境消毒清单',who:'两喵一狗',like:'3.4w'},
+      {pro:true, icon:'⚕️', ttl:'宠物皮肤病为什么容易反复？关键在这几点',who:'宠物内科医师',like:'5677'},
+    ],
+  },
+  eye:{
+    level:'low', title:'眼部轻微异常 · 建议观察', emoji:'👁',
+    desc:'检测到轻度流泪/眼周分泌物，多数为轻微刺激或结膜炎早期',
+    conf:71,
+    findings:[
+      ['异常特征','眼角分泌物增多、轻度流泪'],
+      ['伴随表现','眼周毛发湿润/泪痕'],
+      ['眼球','未见明显浑浊或红肿'],
+    ],
+    causes:[[52,'轻度结膜炎/环境刺激'],[28,'泪管堵塞/泪痕'],[20,'异物或倒睫刺激']],
+    observe:['分泌物是否由透明转为黄绿色脓性','是否频繁眯眼、用爪抓眼','眼球是否发红、充血','是否出现畏光'],
+    danger:['眼球明显充血、角膜变浑浊','大量黄绿色脓性分泌物','宠物痛到无法睁眼'],
+    todos:['用宠物专用生理盐水/洗眼液轻柔清洁眼周','观察2-3天，多数轻微刺激可自行缓解','避免用手揉搓，防止二次感染','若转为脓性或持续加重再就医'],
+    notes:[
+      {pro:true, icon:'👁', ttl:'猫咪眼睛分泌物颜色自查表（收藏级）',who:'眼科宠医Dr.Sun',like:'1.8w'},
+      {pro:false,icon:'🐱', ttl:'幼猫结膜炎护理，洗眼液这样用最有效',who:'奶猫饲养手册',like:'7102'},
+      {pro:false,icon:'😿', ttl:'泪痕重不一定是病！我家猫的改善经验',who:'布偶日常',like:'2.6w'},
+      {pro:true, icon:'⚕️', ttl:'什么情况下眼睛问题必须马上看医生？',who:'宠物眼科团队',like:'4321'},
+    ],
+  },
+  teeth:{
+    level:'mid', title:'口腔异常 · 疑似牙结石/牙龈炎', emoji:'🦷',
+    desc:'检测到牙面黄褐色沉积与牙龈发红，符合牙结石伴牙龈炎表现',
+    conf:79,
+    findings:[
+      ['异常特征','牙面黄褐色结石沉积'],
+      ['伴随表现','牙龈边缘发红，可能有口臭'],
+      ['牙齿','未见明显松动/断裂'],
+    ],
+    causes:[[60,'牙结石伴牙龈炎'],[25,'牙周炎早期'],[15,'口腔溃疡/异物']],
+    observe:['进食是否变慢、偏好软食','是否流口水、口臭加重','牙龈是否出血','是否用爪抓嘴或拒绝啃咬'],
+    danger:['牙龈大量出血、牙齿松动脱落','面部肿胀、无法进食','持续流口水伴精神差'],
+    todos:['引入宠物洁牙用品（洁牙棒/牙膏）','观察进食与口臭情况','牙结石较厚需就医做专业超声波洁牙','绝育/洁牙前需做基础体检评估麻醉风险'],
+    notes:[
+      {pro:true, icon:'🦷', ttl:'狗狗牙结石不管会怎样？兽医科普牙周病危害',who:'口腔科宠医',like:'1.3w'},
+      {pro:false,icon:'🐶', ttl:'金毛洗牙全过程记录，费用+注意事项',who:'大金毛豆豆',like:'6540'},
+      {pro:false,icon:'🪥', ttl:'从抗拒到配合！我给猫刷牙的驯化过程',who:'猫奴修炼中',like:'1.9w'},
+      {pro:true, icon:'⚕️', ttl:'宠物洗牙要麻醉，风险大吗？一文说清',who:'宠物麻醉师',like:'8890'},
+    ],
+  },
+  poop:{
+    level:'mid', title:'排泄物异常 · 疑似消化问题', emoji:'💩',
+    desc:'检测到粪便性状异常（偏软/带黏液），提示消化道不适',
+    conf:73,
+    findings:[
+      ['异常特征','粪便偏软、不成形'],
+      ['伴随表现','可能带黏液或未消化食物'],
+      ['颜色','待观察是否发黑/带血'],
+    ],
+    causes:[[40,'饮食不当/换粮应激'],[32,'肠道寄生虫'],[28,'肠胃炎/菌群失调']],
+    observe:['排便次数与性状变化','是否呕吐、腹胀','食欲和精神状态','是否有里急后重（频繁蹲厕）'],
+    danger:['血便、黑便（柏油样）','剧烈呕吐+腹泻导致脱水','精神极差、腹部剧烈疼痛'],
+    todos:['暂停零食，喂食易消化处方粮','保证饮水，防止脱水','留取新鲜粪便样本，就医做便检查虫','定期驱虫，记录排便日记'],
+    notes:[
+      {pro:true, icon:'💩', ttl:'宠物便便健康自查图鉴（Bristol分级）',who:'消化科宠医',like:'2.4w'},
+      {pro:false,icon:'🐱', ttl:'猫咪软便反复，做了便检才发现是球虫',who:'铲屎官阿May',like:'5120'},
+      {pro:false,icon:'🍚', ttl:'换粮拉稀？7天过渡法亲测有效',who:'养猫日记本',like:'1.6w'},
+      {pro:true, icon:'⚕️', ttl:'什么样的腹泻必须马上就医？兽医划重点',who:'宠物内科Dr.Wu',like:'6234'},
+    ],
+  },
+  paw:{
+    level:'low', title:'爪部轻微异常 · 建议观察', emoji:'🐾',
+    desc:'检测到爪垫/趾间轻度红肿或舔舐痕迹，多为局部刺激',
+    conf:69,
+    findings:[
+      ['异常特征','趾间/爪垫轻度发红'],
+      ['伴随表现','频繁舔舐爪部'],
+      ['指甲','未见明显断裂/嵌入'],
+    ],
+    causes:[[46,'趾间炎/局部刺激'],[30,'过敏或潮湿引起'],[24,'异物/小伤口']],
+    observe:['是否持续舔咬同一只爪','红肿是否扩大、化脓','走路是否跛行、不敢着地','趾间是否有异物或伤口'],
+    danger:['爪部化脓、肿胀明显','明显跛行、拒绝行走','伴发热、精神差'],
+    todos:['检查趾间有无异物、小刺','保持爪部清洁干燥','戴脖圈减少舔舐','红肿加重或跛行及时就医'],
+    notes:[
+      {pro:true, icon:'🐾', ttl:'狗狗总舔爪子？趾间炎的常见原因与处理',who:'宠物皮肤科',like:'1.1w'},
+      {pro:false,icon:'🐶', ttl:'柯基趾间炎护理，泡脚+消炎恢复经验',who:'短腿柯基球',like:'4980'},
+      {pro:false,icon:'🧦', ttl:'猫咪爪垫受伤怎么办？居家处理记录',who:'两只英短',like:'8760'},
+      {pro:true, icon:'⚕️', ttl:'宠物跛行别大意，可能是这些原因',who:'骨科宠医团队',like:'5432'},
+    ],
+  },
+};
 
-  let currentStream = null;
-  let facingMode = 'user'; // 'user' 前置, 'environment' 后置
-  let lastPhotoDataUrl = null;
+const LEVEL_MAP = {
+  low: {cls:'risk-low', lvl:'风险等级 · 低', txt:'可居家观察', emoji:'🟢'},
+  mid: {cls:'risk-mid', lvl:'风险等级 · 中', txt:'建议尽快咨询', emoji:'🟡'},
+  high:{cls:'risk-high',lvl:'风险等级 · 高', txt:'建议立即就医', emoji:'🔴'},
+};
 
-  function setStatus(msg) {
-    statusEl.textContent = msg || '';
+/* ================= 状态 ================= */
+let pet = loadPet();
+let currentPart = null;
+let stream = null;
+let hasImage = false;
+let lastDiag = null;
+
+/* ================= 宠物档案 ================= */
+function loadPet(){
+  try{ const p = JSON.parse(localStorage.getItem('mw_pet')); if(p) return p; }catch(e){}
+  return {name:'点点', species:'猫', breed:'英短', age:'1', weight:'4.2', neuter:'已绝育', history:''};
+}
+function renderPet(){
+  document.getElementById('petName').textContent = pet.name || '未命名';
+  document.getElementById('petAvatar').textContent = pet.species==='狗'?'🐶':'🐱';
+  const parts=[pet.breed, (pet.age?pet.age+'岁':''), (pet.weight?pet.weight+'kg':''), pet.neuter].filter(Boolean);
+  document.getElementById('petMeta').textContent = parts.join(' · ');
+}
+function openPetSheet(){
+  document.getElementById('f-name').value = pet.name||'';
+  document.getElementById('f-breed').value = pet.breed||'';
+  document.getElementById('f-age').value = pet.age||'';
+  document.getElementById('f-weight').value = pet.weight||'';
+  document.getElementById('f-history').value = pet.history||'';
+  setSeg('f-species', pet.species||'猫');
+  setSeg('f-neuter', pet.neuter||'已绝育');
+  document.getElementById('petMask').classList.add('show');
+}
+function closePetSheet(){ document.getElementById('petMask').classList.remove('show'); }
+function setSeg(id,val){
+  document.querySelectorAll('#'+id+' .opt').forEach(o=>o.classList.toggle('on', o.dataset.v===val));
+}
+function getSeg(id){ const on=document.querySelector('#'+id+' .opt.on'); return on?on.dataset.v:''; }
+document.querySelectorAll('.seg').forEach(seg=>{
+  seg.addEventListener('click',e=>{
+    const opt=e.target.closest('.opt'); if(!opt)return;
+    seg.querySelectorAll('.opt').forEach(o=>o.classList.remove('on'));
+    opt.classList.add('on');
+  });
+});
+function savePet(){
+  pet={
+    name:document.getElementById('f-name').value.trim()||'毛孩子',
+    species:getSeg('f-species'),
+    breed:document.getElementById('f-breed').value.trim()||'未知品种',
+    age:document.getElementById('f-age').value.trim(),
+    weight:document.getElementById('f-weight').value.trim(),
+    neuter:getSeg('f-neuter'),
+    history:document.getElementById('f-history').value.trim(),
+  };
+  localStorage.setItem('mw_pet', JSON.stringify(pet));
+  renderPet(); closePetSheet(); toast('档案已保存 🐾');
+}
+
+/* ================= 部位选择 ================= */
+function renderParts(){
+  const box=document.getElementById('parts'); box.innerHTML='';
+  PARTS.forEach(p=>{
+    const el=document.createElement('div');
+    el.className='part'; el.innerHTML=`${p.icon} ${p.name}`;
+    el.onclick=()=>{ currentPart=p; renderParts(); updateScanBtn(); document.getElementById('partTag').textContent='扫描'+p.name; };
+    if(currentPart&&currentPart.id===p.id) el.classList.add('active');
+    box.appendChild(el);
+  });
+}
+function updateScanBtn(){
+  document.getElementById('scanBtn').disabled = !(hasImage && currentPart);
+}
+
+/* ================= 摄像头 & 图片 ================= */
+async function toggleCam(){
+  const video=document.getElementById('video');
+  if(stream){ stopCam(); document.getElementById('camBtn').textContent='开启摄像头'; return; }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ toast('浏览器不支持摄像头'); return; }
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+    video.srcObject=stream; video.style.display='block';
+    document.getElementById('shot').style.display='none';
+    document.getElementById('stageHint').style.display='none';
+    document.getElementById('camBtn').textContent='拍照';
+    hasImage=false; updateScanBtn();
+    // 第二次点击拍照
+    document.getElementById('camBtn').onclick=capture;
+  }catch(e){ toast('摄像头开启失败：'+e.name); }
+}
+function capture(){
+  const video=document.getElementById('video'), shot=document.getElementById('shot');
+  const c=document.createElement('canvas'); c.width=video.videoWidth; c.height=video.videoHeight;
+  c.getContext('2d').drawImage(video,0,0);
+  shot.src=c.toDataURL('image/jpeg',0.85);
+  shot.style.display='block'; video.style.display='none';
+  stopCam();
+  hasImage=true; updateScanBtn();
+  document.getElementById('camBtn').textContent='重新拍摄';
+  document.getElementById('camBtn').onclick=toggleCam;
+  toast('已拍照 📸');
+}
+function stopCam(){ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} }
+function onFile(e){
+  const f=e.target.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    const shot=document.getElementById('shot');
+    shot.src=ev.target.result; shot.style.display='block';
+    document.getElementById('video').style.display='none';
+    document.getElementById('stageHint').style.display='none';
+    stopCam();
+    hasImage=true; updateScanBtn();
+    document.getElementById('camBtn').textContent='开启摄像头';
+    document.getElementById('camBtn').onclick=toggleCam;
+    toast('照片已上传 🖼');
+  };
+  r.readAsDataURL(f);
+}
+
+/* ================= AI 诊断（内置模拟，预留真实接口） ================= */
+/*
+  真实接入示例（拿到可用的多模态模型后替换本函数）：
+  async function diagnose(imageBase64, part, pet){
+    const resp = await fetch(AI_ENDPOINT, { method:'POST', headers:{...}, body: JSON.stringify({
+      model:'...', messages:[{role:'user',content:[
+        {type:'text', text:`你是宠物健康初筛助手。宠物：${JSON.stringify(pet)}，扫描部位：${part.name}。请输出风险等级/原因/观察指标/危险信号/行动建议，JSON格式。`},
+        {type:'image_url', image_url:{url:imageBase64}}
+      ]}]
+    })});
+    return await resp.json(); // 解析成与 DIAG_DB 相同结构
   }
+*/
+function diagnose(part){
+  // 模拟：按部位返回，并结合宠物信息做轻微个性化
+  const base = JSON.parse(JSON.stringify(DIAG_DB[part.id]));
+  // 幼龄/老龄轻微上调关注
+  const age = parseFloat(pet.age||'0');
+  if(age && (age<0.5 || age>10) && base.level==='low') base.level='mid';
+  return base;
+}
 
-  function isSecureContextOk() {
-    // getUserMedia 要求 https 或 localhost
-    return window.isSecureContext;
+function startScan(){
+  if(!hasImage||!currentPart) return;
+  const stage=document.getElementById('stage');
+  const btn=document.getElementById('scanBtn');
+  stage.classList.add('scanning');
+  btn.disabled=true; btn.textContent='🔍 AI 分析中...';
+  document.getElementById('result').style.display='none';
+
+  setTimeout(()=>{
+    const diag=diagnose(currentPart);
+    lastDiag=diag;
+    renderResult(diag);
+    stage.classList.remove('scanning');
+    btn.disabled=false; btn.textContent='🔍 重新诊断';
+    document.getElementById('result').scrollIntoView({behavior:'smooth',block:'start'});
+  }, 2200);
+}
+
+function renderResult(d){
+  const lv=LEVEL_MAP[d.level];
+  const banner=document.getElementById('riskBanner');
+  banner.className='risk-banner '+lv.cls;
+  document.getElementById('riskLvl').textContent=lv.lvl;
+  document.getElementById('riskTxt').textContent=lv.txt+' · '+d.title;
+  document.getElementById('riskDesc').textContent=d.desc;
+  document.getElementById('riskEmoji').textContent=d.emoji;
+
+  document.getElementById('confPct').textContent=d.conf+'%';
+  setTimeout(()=>{document.getElementById('confBar').style.width=d.conf+'%';},100);
+
+  const fd=document.getElementById('findings'); fd.innerHTML='';
+  d.findings.forEach(([k,v])=>fd.insertAdjacentHTML('beforeend',`<div class="row"><div class="k">${k}</div><div class="v">${v}</div></div>`));
+
+  const cs=document.getElementById('causes'); cs.innerHTML='';
+  d.causes.forEach(([pct,nm])=>cs.insertAdjacentHTML('beforeend',
+    `<div class="cause"><div class="pct">${pct}%</div><div class="cbar"><div class="nm">${nm}</div><div class="ln"><i style="width:${pct}%"></i></div></div></div>`));
+
+  fillList('observe', d.observe);
+  fillList('danger', d.danger);
+  fillList('todos', d.todos);
+
+  document.getElementById('matchPet').textContent=`${pet.breed} · ${pet.age||'?'}岁 · ${currentPart.name}${d.title.replace(/.*·/,'')}`;
+  const nb=document.getElementById('notes'); nb.innerHTML='';
+  d.notes.forEach(n=>nb.insertAdjacentHTML('beforeend',
+    `<div class="note" onclick="toast('Demo：真实版将跳转小红书笔记')">
+       <div class="cover">${n.icon}</div>
+       <div class="body">
+         <div class="ttl">${n.pro?'<span class="badge-pro">专业</span>':''}${n.ttl}</div>
+         <div class="foot"><span class="who">${n.who}</span><span class="like">♥ ${n.like}</span></div>
+       </div>
+     </div>`));
+}
+function fillList(id,arr){
+  const el=document.getElementById(id); el.innerHTML='';
+  arr.forEach(t=>el.insertAdjacentHTML('beforeend',`<li>${t}</li>`));
+}
+
+/* ================= 健康档案 ================= */
+function loadRecords(){ try{return JSON.parse(localStorage.getItem('mw_records'))||[];}catch(e){return[];} }
+function saveRecord(){
+  if(!lastDiag){toast('请先完成一次诊断');return;}
+  const recs=loadRecords();
+  recs.unshift({
+    date:new Date().toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}),
+    part:currentPart.name, title:lastDiag.title, level:lastDiag.level,
+    img:document.getElementById('shot').src,
+  });
+  localStorage.setItem('mw_records', JSON.stringify(recs.slice(0,50)));
+  toast('已存入健康档案 💾');
+  renderTimeline();
+}
+function renderTimeline(){
+  const recs=loadRecords();
+  document.getElementById('recCount').textContent=recs.length+' 条';
+  const tl=document.getElementById('timeline');
+  if(!recs.length){ tl.innerHTML='<div class="tl-empty">还没有健康记录<br>完成一次扫描并存档试试吧 🐾</div>'; }
+  else{
+    tl.innerHTML=recs.map(r=>{
+      const lv=LEVEL_MAP[r.level];
+      return `<div class="tl-item"><div class="date">${r.date} · ${r.part}</div>
+        <div class="tt">${r.title} <span style="color:${r.level==='high'?'#f04438':r.level==='mid'?'#f79009':'#12b76a'}">● ${lv.txt}</span></div></div>`;
+    }).join('');
   }
+  // 小结
+  const sm=document.getElementById('summary');
+  const cnt={low:0,mid:0,high:0}; recs.forEach(r=>cnt[r.level]++);
+  sm.innerHTML=`
+    <div class="row"><div class="k">累计扫描</div><div class="v">${recs.length} 次</div></div>
+    <div class="row"><div class="k">风险分布</div><div class="v">🟢 ${cnt.low} · 🟡 ${cnt.mid} · 🔴 ${cnt.high}</div></div>
+    <div class="row"><div class="k">最近记录</div><div class="v">${recs[0]?recs[0].date:'—'}</div></div>`;
+}
 
-  async function startCamera() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setStatus('当前浏览器不支持 getUserMedia API');
-      return;
-    }
-    if (!isSecureContextOk()) {
-      setStatus('警告：当前不是安全上下文（非 HTTPS/localhost），摄像头大概率无法调用');
-    }
+/* ================= 求助/摘要笔记 ================= */
+function genHelpNote(){
+  if(!lastDiag){toast('请先完成一次诊断');return;}
+  const d=lastDiag;
+  const txt=
+`【求助】我家${pet.species}${currentPart.name}出现${d.title.replace(/.*·\s*/,'')}，有经验的姐妹帮我看看🥹
 
-    stopCamera(); // 先关掉已有的流
+🐾 基本情况
+· 品种：${pet.breed}
+· 年龄：${pet.age||'?'}岁 ｜ 体重：${pet.weight||'?'}kg ｜ ${pet.neuter}
+${pet.history?'· 病史：'+pet.history+'\n':''}
+🔍 症状描述
+${d.findings.map(f=>'· '+f[1]).join('\n')}
 
-    const constraints = {
-      video: { facingMode: { ideal: facingMode } },
-      audio: false
-    };
+🤖 喵汪CT机初筛：${LEVEL_MAP[d.level].txt}
+可能原因：${d.causes.map(c=>c[1]).join(' / ')}
 
-    try {
-      setStatus('正在请求摄像头权限...');
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      currentStream = stream;
-      video.srcObject = stream;
-      hint.style.display = 'none';
-      video.style.display = 'block';
-      photo.style.display = 'none';
+❓ 想请教大家
+· 你家毛孩子出现过类似情况吗？
+· 是自己观察护理还是直接去医院？
+· 有推荐的护理产品/靠谱医院吗？
 
-      switchBtn.disabled = false;
-      captureBtn.disabled = false;
-      stopBtn.disabled = false;
-      startBtn.textContent = '重新打开';
-      retakeBtn.style.display = 'none';
-      downloadBtn.style.display = 'none';
+#萌宠健康 #${pet.species}咪日常 #${currentPart.name}护理 #新手养宠`;
+  document.getElementById('noteSheetTitle').textContent='🙋 求助笔记';
+  document.getElementById('noteContent').value=txt;
+  document.getElementById('noteMask').classList.add('show');
+}
+function genVetSummary(){
+  if(!lastDiag){toast('请先完成一次诊断');return;}
+  const d=lastDiag;
+  const txt=
+`【就诊摘要 - 供兽医参考】
 
-      setStatus('摄像头已开启（' + (facingMode === 'user' ? '前置' : '后置') + '）');
-    } catch (err) {
-      console.error(err);
-      setStatus('打开摄像头失败：' + err.name + ' - ' + err.message);
-    }
-  }
+宠物：${pet.species}／${pet.breed}／${pet.age||'?'}岁／${pet.weight||'?'}kg／${pet.neuter}
+既往病史：${pet.history||'无'}
+扫描部位：${currentPart.name}
+发现日期：${new Date().toLocaleDateString('zh-CN')}
 
-  function stopCamera() {
-    if (currentStream) {
-      currentStream.getTracks().forEach(track => track.stop());
-      currentStream = null;
-    }
-  }
+主要异常特征：
+${d.findings.map(f=>'· '+f[0]+'：'+f[1]).join('\n')}
 
-  function fullyStop() {
-    stopCamera();
-    video.srcObject = null;
-    video.style.display = 'none';
-    photo.style.display = 'none';
-    hint.style.display = 'flex';
-    hint.textContent = '点击下方"打开摄像头"开始';
+初筛倾向（AI 参考，非确诊）：
+${d.causes.map(c=>'· '+c[1]+'（'+c[0]+'%）').join('\n')}
 
-    switchBtn.disabled = true;
-    captureBtn.disabled = true;
-    stopBtn.disabled = true;
-    startBtn.textContent = '打开摄像头';
-    retakeBtn.style.display = 'none';
-    downloadBtn.style.display = 'none';
-    setStatus('摄像头已关闭');
-  }
+已观察到的伴随情况：请补充……
+用药史：请补充……`;
+  document.getElementById('noteSheetTitle').textContent='📄 兽医就诊摘要';
+  document.getElementById('noteContent').value=txt;
+  document.getElementById('noteMask').classList.add('show');
+}
+function closeNote(){ document.getElementById('noteMask').classList.remove('show'); }
+function copyNote(){
+  const t=document.getElementById('noteContent');
+  t.select(); t.setSelectionRange(0,99999);
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t.value); }
+    else{ document.execCommand('copy'); }
+    toast('已复制到剪贴板 📋');
+  }catch(e){ toast('复制失败，请手动选择'); }
+}
 
-  function switchCamera() {
-    facingMode = facingMode === 'user' ? 'environment' : 'user';
-    startCamera();
-  }
+/* ================= 通用 ================= */
+function switchPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('on', p.id==='page-'+name));
+  document.querySelectorAll('.tabbar .tab').forEach(t=>t.classList.toggle('on', t.dataset.page===name));
+  if(name==='archive') renderTimeline();
+  window.scrollTo(0,0);
+}
+let toastTimer;
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),1800);
+}
+window.addEventListener('beforeunload', stopCam);
 
-  function capturePhoto() {
-    if (!currentStream) return;
-    const w = video.videoWidth;
-    const h = video.videoHeight;
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    // 前置摄像头拍出来的照片默认是镜像的，这里保持和预览一致做镜像翻转
-    if (facingMode === 'user') {
-      ctx.translate(w, 0);
-      ctx.scale(-1, 1);
-    }
-    ctx.drawImage(video, 0, 0, w, h);
-
-    lastPhotoDataUrl = canvas.toDataURL('image/png');
-    photo.src = lastPhotoDataUrl;
-    photo.style.display = 'block';
-    video.style.display = 'none';
-
-    retakeBtn.style.display = 'inline-block';
-    downloadBtn.style.display = 'inline-block';
-    setStatus('拍照完成，可下载或重新拍摄');
-  }
-
-  function retake() {
-    photo.style.display = 'none';
-    video.style.display = 'block';
-    retakeBtn.style.display = 'none';
-    downloadBtn.style.display = 'none';
-    setStatus('已返回预览');
-  }
-
-  function downloadPhoto() {
-    if (!lastPhotoDataUrl) return;
-    downloadLink.href = lastPhotoDataUrl;
-    downloadLink.download = 'photo-' + Date.now() + '.png';
-    downloadLink.click();
-  }
-
-  startBtn.addEventListener('click', startCamera);
-  switchBtn.addEventListener('click', switchCamera);
-  captureBtn.addEventListener('click', capturePhoto);
-  retakeBtn.addEventListener('click', retake);
-  downloadBtn.addEventListener('click', downloadPhoto);
-  stopBtn.addEventListener('click', fullyStop);
-
-  // 页面卸载时释放摄像头
-  window.addEventListener('beforeunload', stopCamera);
-
-  // 初始提示
-  if (!isSecureContextOk()) {
-    setStatus('提示：当前页面非 HTTPS/localhost，摄像头可能无法调用');
-  }
-})();
+/* init */
+renderPet(); renderParts(); renderTimeline();
 </script>
-
 </body>
 </html>
