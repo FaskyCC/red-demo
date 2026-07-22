@@ -281,6 +281,18 @@
   <div class="load-cat">🙀</div>
 </div>
 
+<!-- ============ AI 失败页 ============ -->
+<div class="screen" id="aiError">
+  <div class="nav"><span class="back" onclick="goHome()">‹</span><span class="title">扫描诊断</span><span class="rt"></span></div>
+  <div style="text-align:center;padding:60px 28px 0;">
+    <div style="font-size:72px;">🐾</div>
+    <h2 style="font-size:19px;margin:18px 0 10px;">AI 暂时没能看懂这张照片</h2>
+    <p id="aiErrorMsg" style="font-size:14px;color:var(--sub);line-height:1.7;margin:0 auto 28px;max-width:300px;">AI 当前访问人数过多，请稍后再试。</p>
+    <button class="btn btn-primary" style="width:100%;max-width:300px;margin:0 auto 12px;" onclick="retryScan()">🔄 重新拍照 / 上传</button>
+    <button class="btn btn-ghost" style="width:100%;max-width:300px;margin:0 auto;" onclick="useSampleFromError()">✨ 使用示例图片</button>
+  </div>
+</div>
+
 <!-- ============ 健康检测报告 ============ -->
 <div class="screen" id="report">
   <div class="nav"><span class="back" onclick="goHome()">‹</span><span class="title">宠物体检报告</span><span class="rt"></span></div>
@@ -762,7 +774,10 @@ async function glmAsk(dataUrl, prompt){
       ]}],
     }),
   });
-  if(!resp.ok) throw new Error('GLM HTTP '+resp.status);
+  if(!resp.ok){
+    if(resp.status===429) throw new Error('AI 当前访问人数过多（429），请稍后再试');
+    throw new Error('AI 服务异常（HTTP '+resp.status+'）');
+  }
   const j=await resp.json();
   return (j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||'');
 }
@@ -869,14 +884,18 @@ function runLoading(){
       console.log('[Pi-Pet] 调用 GLM AI 情绪识别中… scanFileName=', JSON.stringify(scanFileName));
       setBubbleStatus('🤖 正在调用 GLM AI 分析情绪…');
       recog=glmEmotion(scanImageData)
-        .then(t=>{ console.log('[Pi-Pet] GLM 情绪返回:', t); setBubbleStatus('✅ 情绪分析完成：'+(t||'positive')); return t || 'positive'; })
-        .catch(err=>{ console.error('[Pi-Pet] GLM 情绪识别失败，回退：',err); setBubbleStatus('❌ AI 调用失败：'+err.message); return 'positive'; });
+        .then(t=>{ console.log('[Pi-Pet] GLM 情绪返回:', t); return t || 'positive'; })
+        .catch(err=>{ console.error('[Pi-Pet] GLM 情绪识别失败：',err); return {__error:err.message||'AI 调用失败'}; });
     }
-    Promise.all([recog,minD]).then(([t])=>{ clearInterval(dt); currentEmotion=t||'positive'; renderEmotion(); });
+    Promise.all([recog,minD]).then(([t])=>{
+      clearInterval(dt);
+      if(t && t.__error){ showAiError(t.__error); return; }   // 失败 -> 错误页，不展示内容
+      currentEmotion=t||'positive'; renderEmotion();
+    });
     return;
   }
 
-  // 健康流程：文件名可判定则优先（演示图 100% 准），否则 GLM 识别，最后哈希兜底
+  // 健康流程：文件名可判定则优先（演示图 100% 准），否则 GLM 识别
   const minDelay=new Promise(r=>setTimeout(r,3000)); // 保证动画至少播 3s
   let recognize;
   const caseByName=matchByFilename(scanFileName);
@@ -892,19 +911,18 @@ function runLoading(){
     recognize=glmClassify(scanImageData)
       .then(key=>{
         console.log('[Pi-Pet] GLM 返回:', key);
-        if(key){ setBubbleStatus('✅ AI 识别完成：'+key); return key; }
-        console.warn('[Pi-Pet] GLM 返回 other/空，走哈希兜底');
-        setBubbleStatus('⚠️ AI 未识别出部位，用兜底');
-        return hashToCase(scanImageData);
+        if(key) return key;                          // AI 命中
+        // AI 明确返回 other（照片看不出问题）——这不是失败，给个温和提示
+        return {__error:'AI 未能从照片中识别出明确的问题部位，请拍清楚问题部位后重试，或使用示例图片体验', soft:true};
       })
       .catch(err=>{
-        console.error('[Pi-Pet] GLM 识别失败，回退兜底：', err);
-        setBubbleStatus('❌ AI 调用失败：'+err.message);
-        return hashToCase(scanImageData);
+        console.error('[Pi-Pet] GLM 识别失败：', err);
+        return {__error:err.message||'AI 调用失败'};
       });
   }
   Promise.all([recognize, minDelay]).then(([key])=>{
     clearInterval(dt);
+    if(key && key.__error){ showAiError(key.__error, key.soft); return; }  // 失败 -> 错误页，不展示内容
     currentCase = key || 'ear';
     renderReport();
   });
@@ -915,6 +933,22 @@ function setBubbleStatus(text){
   let el=document.getElementById('aiStatusBubble');
   if(!el){ el=document.createElement('div'); el.id='aiStatusBubble'; el.className='bubble'; el.style.marginLeft='40px'; box.appendChild(el); }
   el.innerHTML='<span class="ic">🤖</span>'+text;
+}
+// AI 失败 -> 展示错误页（不再随便展示兜底诊断）
+function showAiError(msg, soft){
+  document.getElementById('aiErrorMsg').textContent = msg || 'AI 服务暂时不可用，请稍后再试。';
+  show('aiError');
+}
+// 从错误页重新拍照/上传（回到来源选择弹窗）
+function retryScan(){
+  show('home');
+  startFlow(currentFlow||'health');
+}
+// 从错误页直接用示例图片
+function useSampleFromError(){
+  show('home');
+  currentFlow=currentFlow||'health';
+  openGallery();
 }
 
 /* ===================== 健康报告 ===================== */
