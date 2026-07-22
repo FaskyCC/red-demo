@@ -194,12 +194,20 @@
   .cam-mask video{flex:1;object-fit:cover;width:100%;}
   .cam-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:16px;color:#fff;z-index:2;}
   .cam-top span{font-size:16px;cursor:pointer;background:rgba(0,0,0,.4);width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
-  .cam-bar{padding:24px;display:flex;justify-content:center;align-items:center;gap:40px;background:#000;}
+  .cam-bar{padding:24px;display:flex;justify-content:center;align-items:center;gap:40px;background:#000;position:relative;}
   .shutter{width:70px;height:70px;border-radius:50%;background:#fff;border:5px solid rgba(255,255,255,.4);cursor:pointer;}
   .cam-scan-frame{position:absolute;inset:20% 12%;border:2px solid rgba(255,255,255,.6);border-radius:16px;pointer-events:none;}
 
   .toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:rgba(20,20,40,.9);color:#fff;padding:11px 20px;border-radius:24px;font-size:13px;z-index:200;opacity:0;transition:.25s;pointer-events:none;white-space:nowrap;}
   .toast.show{opacity:1;bottom:94px;}
+  /* 扫描方式选项 */
+  .src-opt{display:flex;align-items:center;gap:14px;padding:14px;border:1.5px solid var(--line);border-radius:16px;margin-bottom:12px;cursor:pointer;transition:.15s;}
+  .src-opt:active{transform:scale(.98);background:var(--blue-soft);}
+  .src-opt .src-ic{width:48px;height:48px;border-radius:12px;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-size:26px;flex:0 0 auto;}
+  .src-opt .src-tx{flex:1;}
+  .src-opt .src-tx .st{font-size:15px;font-weight:700;}
+  .src-opt .src-tx .ss{font-size:12px;color:var(--sub);margin-top:2px;}
+  .src-opt .src-ar{color:var(--sub);font-size:20px;}
   input[type=file]{display:none;}
 </style>
 </head>
@@ -382,12 +390,41 @@
   </div>
 </div>
 
+<!-- 扫描方式选择 -->
+<div class="mask" id="sourceMask">
+  <div class="sheet">
+    <h3 id="sourceTitle">选择扫描方式</h3>
+    <div class="src-opt" onclick="chooseSource('camera')">
+      <div class="src-ic">📷</div>
+      <div class="src-tx"><div class="st">拍照扫描</div><div class="ss">调用摄像头实时拍摄</div></div>
+      <div class="src-ar">›</div>
+    </div>
+    <div class="src-opt" onclick="chooseSource('album')">
+      <div class="src-ic">🖼️</div>
+      <div class="src-tx"><div class="st">从相册上传</div><div class="ss">选择一张已有的照片</div></div>
+      <div class="src-ar">›</div>
+    </div>
+    <div class="src-opt" onclick="chooseSource('demo')">
+      <div class="src-ic">✨</div>
+      <div class="src-tx"><div class="st">使用示例图片</div><div class="ss">没有照片？先体验完整流程</div></div>
+      <div class="src-ar">›</div>
+    </div>
+    <button class="btn btn-ghost" style="width:100%;margin-top:6px;" onclick="closeSource()">取消</button>
+  </div>
+</div>
+
 <!-- 相机弹层 -->
 <div class="cam-mask" id="camMask">
   <div class="cam-top"><span onclick="closeCam()">✕</span><span onclick="flipCam()">🔄</span></div>
   <video id="camVideo" autoplay playsinline muted></video>
   <div class="cam-scan-frame"></div>
-  <div class="cam-bar"><div class="shutter" onclick="doShot()"></div></div>
+  <div class="cam-bar">
+    <span onclick="closeCam();document.getElementById('scanFile').click();" style="color:#fff;font-size:13px;position:absolute;left:24px;cursor:pointer;">改用上传</span>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <div class="shutter" onclick="doShot()"></div>
+      <span style="color:#fff;font-size:12px;">轻触拍照</span>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -513,16 +550,27 @@ function goHome(){ show('home'); }
 /* ===================== 扫描流程 ===================== */
 function startFlow(flow){
   currentFlow=flow;
-  // 直接调起相机；若不支持则退回文件选择
-  openCam();
+  document.getElementById('sourceTitle').textContent = flow==='emotion' ? '给毛孩子拍张照，读懂它的情绪' : '给毛孩子的问题部位拍张照';
+  document.getElementById('sourceMask').classList.add('show');
+}
+function closeSource(){ document.getElementById('sourceMask').classList.remove('show'); }
+function chooseSource(kind){
+  closeSource();
+  if(kind==='camera'){ openCam(); }
+  else if(kind==='album'){ document.getElementById('scanFile').click(); }
+  else if(kind==='demo'){ scanImageData=null; runLoading(); }
 }
 async function openCam(){
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ document.getElementById('scanFile').click(); return; }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ toast('设备不支持摄像头，请改用上传'); document.getElementById('scanFile').click(); return; }
   try{
+    // ideal 为软约束：电脑无后置会自动回退到可用摄像头
     camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:camFacing}},audio:false});
-    document.getElementById('camVideo').srcObject=camStream;
-    document.getElementById('camMask').classList.add('show');
-  }catch(e){ toast('无法调用相机，请上传照片'); document.getElementById('scanFile').click(); }
+  }catch(e){
+    try{ camStream=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); } // 再兜底：任意摄像头
+    catch(e2){ toast('无法调用相机('+e2.name+')，请改用上传'); document.getElementById('scanFile').click(); return; }
+  }
+  document.getElementById('camVideo').srcObject=camStream;
+  document.getElementById('camMask').classList.add('show');
 }
 function flipCam(){ camFacing=camFacing==='environment'?'user':'environment'; stopCam(); openCam(); }
 function closeCam(){ stopCam(); document.getElementById('camMask').classList.remove('show'); }
@@ -558,8 +606,9 @@ const LOAD_BUBBLES = {
 function runLoading(){
   show('loading');
   const ph=document.getElementById('loadPhoto');
-  if(scanImageData){ ph.src=scanImageData; ph.style.display='block'; }
-  else{ ph.style.display='none'; }
+  const demoImg='data:image/svg+xml;utf8,'+encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#eaf2ff"/><text x="100" y="130" font-size="110" text-anchor="middle">${pet.species==='狗'?'🐶':'🐱'}</text></svg>`);
+  ph.src = scanImageData || demoImg; ph.style.display='block';
   document.getElementById('loadTitle').firstChild.textContent = currentFlow==='emotion' ? '正在连线情绪分析师 MIMI' : '正在连线宠物汪医生 DUDU';
   // 逐条弹出气泡
   const box=document.getElementById('bubbles'); box.innerHTML='';
