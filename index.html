@@ -554,6 +554,7 @@ let pet = loadPet();
 let currentFlow = null;      // 'health' | 'emotion'
 let currentCase = 'ear';     // 当前健康病例 key
 let scanImageData = null;    // 拍摄/上传的图片
+let scanFileName = '';       // 上传文件名（用于兜底匹配）
 let camStream = null, camFacing = 'environment';
 
 /* ===================== 档案 ===================== */
@@ -645,6 +646,7 @@ function pickSample(key){
   closeGallery();
   currentCase=key;
   scanImageData=HEALTH_DB[key].img;   // 用示例图作为扫描图
+  scanFileName='__sample__';          // 标记：示例图已确定病例，跳过AI识别
   runLoading();
 }
 
@@ -676,6 +678,31 @@ function hashToCase(dataUrl){
 function resolveCase(dataUrl, filename){
   return matchByFilename(filename) || hashToCase(dataUrl);
 }
+
+/* ---- GLM-4.6V-Flash 真实图像识别 ----
+   注意：Demo 演示用途，API Key 直接写在前端，勿对外扩散链接。 */
+const GLM_KEY='5fee5f0cbc954f7b8d8b3fbca9575f0a.NbB4zIVxQ8QY2Ip7';
+const GLM_URL='https://open.bigmodel.cn/api/paas/v4/chat/completions';
+async function glmClassify(dataUrl){
+  const prompt='你是宠物健康初筛助手。请判断这张宠物照片最可能属于以下哪一类健康问题，只返回一个英文单词，不要解释：\near（耳朵/耳道/耳螨）\nteeth（牙齿/口腔/牙结石）\nskin（皮肤/毛发/猫癣/脱毛红肿）\neye（眼睛/眼部/结膜炎）\n如果照片不清晰或都不像，返回 other。只返回一个单词。';
+  const resp=await fetch(GLM_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+GLM_KEY},
+    body:JSON.stringify({
+      model:'glm-4.6v-flash',
+      thinking:{type:'disabled'},
+      messages:[{role:'user',content:[
+        {type:'image_url',image_url:{url:dataUrl}},
+        {type:'text',text:prompt},
+      ]}],
+    }),
+  });
+  if(!resp.ok) throw new Error('GLM HTTP '+resp.status);
+  const j=await resp.json();
+  let txt=(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||'').toLowerCase();
+  const m=txt.match(/ear|teeth|skin|eye/);
+  return m?m[0]:null;   // 命中4类之一返回，其余(other/空)返回 null
+}
 async function openCam(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ toast('设备不支持摄像头，请改用上传'); document.getElementById('scanFile').click(); return; }
   try{
@@ -698,16 +725,15 @@ function doShot(){
   if(camFacing==='user'){ctx.translate(c.width,0);ctx.scale(-1,1);}
   ctx.drawImage(v,0,0);
   scanImageData=c.toDataURL('image/jpeg',0.85);
-  if(currentFlow==='health'){ currentCase=hashToCase(scanImageData); } // 方案B
+  scanFileName='';           // 拍照无文件名
   closeCam(); runLoading();
 }
 function onScanFile(e){
   const f=e.target.files[0]; if(!f){return;}
-  const fname=f.name||'';
+  scanFileName=f.name||'';
   const r=new FileReader();
   r.onload=ev=>{
     scanImageData=ev.target.result; e.target.value='';
-    if(currentFlow==='health'){ currentCase=resolveCase(scanImageData, fname); } // 文件名优先+哈希兜底
     runLoading();
   };
   r.readAsDataURL(f);
@@ -715,9 +741,9 @@ function onScanFile(e){
 
 const LOAD_BUBBLES = {
   health:[
+    ['🔍','AI 正在识别问题部位…'],
     ['🐱','正在参考 20 个病例…'],
-    ['📝','书写诊断书 ing…'],
-    ['🩺','宠物医生努力诊断中…'],
+    ['🩺','宠物医生书写诊断书 ing…'],
   ],
   emotion:[
     ['🐾','正在捕捉微表情…'],
@@ -746,8 +772,34 @@ function runLoading(){
   // 加载动画点
   let n=0; const dots=document.getElementById('loadDots');
   const dt=setInterval(()=>{ n=(n+1)%4; dots.textContent='.'.repeat(n); },400);
-  // 完成后跳报告
-  setTimeout(()=>{ clearInterval(dt); currentFlow==='emotion'?renderEmotion():renderReport(); }, 3200);
+
+  // 情绪流程：无需识别，固定时长后出报告
+  if(currentFlow==='emotion'){
+    setTimeout(()=>{ clearInterval(dt); renderEmotion(); }, 3200);
+    return;
+  }
+
+  // 健康流程：GLM 真实识别 与 加载动画 并行，两者都完成后出报告
+  const minDelay=new Promise(r=>setTimeout(r,3000)); // 保证动画至少播 3s
+  let recognize;
+  if(scanFileName==='__sample__'){
+    recognize=Promise.resolve(currentCase); // 示例图已确定，跳过AI
+  }else{
+    recognize=glmClassify(scanImageData)
+      .then(key=>{
+        if(key){ return key; }                                   // AI 命中
+        return resolveCase(scanImageData, scanFileName);         // AI 返回 other -> 文件名/哈希兜底
+      })
+      .catch(err=>{
+        console.warn('GLM 识别失败，回退兜底：', err);
+        return resolveCase(scanImageData, scanFileName);         // 网络/接口异常 -> 兜底
+      });
+  }
+  Promise.all([recognize, minDelay]).then(([key])=>{
+    clearInterval(dt);
+    currentCase = key || 'ear';
+    renderReport();
+  });
 }
 
 /* ===================== 健康报告 ===================== */
