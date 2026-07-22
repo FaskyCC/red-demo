@@ -352,6 +352,7 @@
 <!-- ============ 情绪扫描报告 ============ -->
 <div class="screen" id="emotion">
   <div class="nav"><span class="back" onclick="goHome()">‹</span><span class="title">宠物行为分析</span><span class="rt"></span></div>
+  <div style="text-align:center;font-size:15px;font-weight:800;margin-top:6px;" id="emoTag">😺 正向情绪 · 状态良好</div>
   <div class="radar-wrap"><svg class="radar-svg" id="radar" viewBox="0 0 300 280"></svg></div>
   <div class="ecard">
     <div class="ecard-head">此刻小情绪</div><div class="ecard-no">01</div>
@@ -529,10 +530,19 @@ const HEALTH_DB = {
 
 const EMOTION_DB = {
   // 六维：恐惧 放松 好奇 警惕 焦虑 开心（0-100）
-  values:[20, 75, 70, 35, 25, 85],
   labels:['恐惧','放松','好奇','警惕','焦虑','开心'],
-  mood:'这只毛孩子坐得相当稳，姿态自然，显示出对周围环境的舒适感和对主人的信任。它的耳朵竖立、眼神明亮，表明它对周围事物保持一定的关注和好奇，可能是在观察周围的声音或运动，体现了它活跃的探索欲望。',
-  act:'可以通过轻柔的声音和适当的玩具与它互动，以满足它的好奇心。同时，给予一些抚摸和关怀，进一步增强它的安全感和开心的情绪。',
+  positive:{
+    tone:'positive',
+    values:[15, 80, 72, 30, 20, 88],
+    mood:'这只毛孩子姿态自然放松，显示出对周围环境的舒适感和对主人的信任。它的眼神明亮、耳朵放松，表明当前情绪愉悦稳定，对周围事物保持好奇和探索欲望，是一种健康积极的状态。',
+    act:'可以通过轻柔的声音和适当的玩具与它互动，满足它的好奇心；同时多给予抚摸和陪伴，进一步巩固它的安全感和愉悦情绪。',
+  },
+  negative:{
+    tone:'negative',
+    values:[70, 25, 35, 78, 72, 18],
+    mood:'这只毛孩子表现出较明显的紧张与警惕，可能伴有恐惧或焦虑情绪。瞳孔、耳朵姿态或身体语言显示它对当前环境感到不安，处于戒备状态，需要引起注意。',
+    act:'请先降低环境刺激（减少噪音、陌生人和其他动物），给它一个安静的躲藏空间；不要强行抱它或靠近，用平稳低沉的声音安抚。若长期处于紧张、躲藏、拒食状态，建议咨询兽医或宠物行为师。',
+  },
 };
 
 const CHAT_REPLIES = {
@@ -553,6 +563,7 @@ const HOSPITALS = [
 let pet = loadPet();
 let currentFlow = null;      // 'health' | 'emotion'
 let currentCase = 'ear';     // 当前健康病例 key
+let currentEmotion = 'positive'; // 当前情绪 positive|negative
 let scanImageData = null;    // 拍摄/上传的图片
 let scanFileName = '';       // 上传文件名（用于兜底匹配）
 let camStream = null, camFacing = 'environment';
@@ -629,16 +640,31 @@ function chooseSource(kind){
 }
 
 /* ---- 方案A：示例图片画廊 ---- */
+const EMOTION_SAMPLES = [
+  {tone:'positive', img:'samples/emo_pos.jpg',  icon:'😺', name:'正向情绪'},
+  {tone:'negative', img:'samples/emo_neg1.jpg', icon:'😿', name:'负向情绪 1'},
+  {tone:'negative', img:'samples/emo_neg2.jpg', icon:'🙀', name:'负向情绪 2'},
+];
 function openGallery(){
   const box=document.getElementById('galleryList'); box.innerHTML='';
-  CASE_KEYS.forEach(k=>{
-    const c=HEALTH_DB[k];
-    box.insertAdjacentHTML('beforeend',
-      `<div class="gitem" onclick="pickSample('${k}')">
-         <img src="${c.img}" alt="${c.gallery.name}">
-         <div class="gcap"><span>${c.gallery.icon}</span>${c.gallery.name}</div>
-       </div>`);
-  });
+  if(currentFlow==='emotion'){
+    EMOTION_SAMPLES.forEach((s,i)=>{
+      box.insertAdjacentHTML('beforeend',
+        `<div class="gitem" onclick="pickEmotionSample(${i})">
+           <img src="${s.img}" alt="${s.name}">
+           <div class="gcap"><span>${s.icon}</span>${s.name}</div>
+         </div>`);
+    });
+  }else{
+    CASE_KEYS.forEach(k=>{
+      const c=HEALTH_DB[k];
+      box.insertAdjacentHTML('beforeend',
+        `<div class="gitem" onclick="pickSample('${k}')">
+           <img src="${c.img}" alt="${c.gallery.name}">
+           <div class="gcap"><span>${c.gallery.icon}</span>${c.gallery.name}</div>
+         </div>`);
+    });
+  }
   document.getElementById('galleryMask').classList.add('show');
 }
 function closeGallery(){ document.getElementById('galleryMask').classList.remove('show'); }
@@ -647,6 +673,14 @@ function pickSample(key){
   currentCase=key;
   scanImageData=HEALTH_DB[key].img;   // 用示例图作为扫描图
   scanFileName='__sample__';          // 标记：示例图已确定病例，跳过AI识别
+  runLoading();
+}
+function pickEmotionSample(i){
+  closeGallery();
+  const s=EMOTION_SAMPLES[i];
+  currentEmotion=s.tone;
+  scanImageData=s.img;
+  scanFileName='__sample__';          // 跳过AI识别
   runLoading();
 }
 
@@ -667,6 +701,14 @@ function matchByFilename(name){
   }
   return null;
 }
+// 情绪文件名兜底：正向/负向
+function emotionByFilename(name){
+  if(!name) return null;
+  const n=name.toLowerCase();
+  if(/负向|负面|恐惧|警惕|焦虑|愤怒|negative|neg|fear|angry/.test(n)) return 'negative';
+  if(/正向|正面|开心|放松|positive|pos|happy|relax/.test(n)) return 'positive';
+  return null;
+}
 function hashToCase(dataUrl){
   let h=5381;
   const s=dataUrl||'';
@@ -683,8 +725,30 @@ function resolveCase(dataUrl, filename){
    注意：Demo 演示用途，API Key 直接写在前端，勿对外扩散链接。 */
 const GLM_KEY='5fee5f0cbc954f7b8d8b3fbca9575f0a.NbB4zIVxQ8QY2Ip7';
 const GLM_URL='https://open.bigmodel.cn/api/paas/v4/chat/completions';
-async function glmClassify(dataUrl){
-  const prompt='你是宠物健康初筛助手。请判断这张宠物照片最可能属于以下哪一类健康问题，只返回一个英文单词，不要解释：\near（耳朵/耳道/耳螨）\nteeth（牙齿/口腔/牙结石）\nskin（皮肤/毛发/猫癣/脱毛红肿）\neye（眼睛/眼部/结膜炎）\n如果照片不清晰或都不像，返回 other。只返回一个单词。';
+
+// 图片压缩：把任意 dataURL 缩到最长边 <=maxSide，jpeg 输出，显著减小体积、加快识别
+function compressImage(dataUrl, maxSide=720, quality=0.82){
+  return new Promise((resolve)=>{
+    try{
+      const img=new Image();
+      img.onload=()=>{
+        let {width:w, height:h}=img;
+        if(Math.max(w,h)>maxSide){
+          if(w>=h){ h=Math.round(h*maxSide/w); w=maxSide; }
+          else { w=Math.round(w*maxSide/h); h=maxSide; }
+        }
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(c.toDataURL('image/jpeg',quality));
+      };
+      img.onerror=()=>resolve(dataUrl); // 失败就用原图
+      img.src=dataUrl;
+    }catch(e){ resolve(dataUrl); }
+  });
+}
+
+// 通用 GLM 图片提问
+async function glmAsk(dataUrl, prompt){
   const resp=await fetch(GLM_URL,{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+GLM_KEY},
@@ -699,9 +763,25 @@ async function glmClassify(dataUrl){
   });
   if(!resp.ok) throw new Error('GLM HTTP '+resp.status);
   const j=await resp.json();
-  let txt=(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||'').toLowerCase();
+  return (j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||'');
+}
+
+async function glmClassify(dataUrl){
+  const prompt='你是宠物健康初筛助手。请判断这张宠物照片最可能属于以下哪一类健康问题，只返回一个英文单词，不要解释：\near（耳朵/耳道/耳螨）\nteeth（牙齿/口腔/牙结石）\nskin（皮肤/毛发/猫癣/脱毛红肿）\neye（眼睛/眼部/结膜炎）\n如果照片不清晰或都不像，返回 other。只返回一个单词。';
+  const small=await compressImage(dataUrl);
+  const txt=(await glmAsk(small, prompt)).toLowerCase();
   const m=txt.match(/ear|teeth|skin|eye/);
   return m?m[0]:null;   // 命中4类之一返回，其余(other/空)返回 null
+}
+
+// 情绪识别：正向 / 负向
+async function glmEmotion(dataUrl){
+  const prompt='你是宠物情绪分析助手。请判断照片中宠物当前的情绪倾向，只返回一个英文单词，不要解释：\npositive（放松、开心、好奇、舒适、亲人等正向情绪）\nnegative（恐惧、警惕、焦虑、紧张、不适、愤怒等负向情绪）\n只返回 positive 或 negative。';
+  const small=await compressImage(dataUrl);
+  const txt=(await glmAsk(small, prompt)).toLowerCase();
+  if(txt.includes('positive')) return 'positive';
+  if(txt.includes('negative')) return 'negative';
+  return null;
 }
 async function openCam(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ toast('设备不支持摄像头，请改用上传'); document.getElementById('scanFile').click(); return; }
@@ -773,27 +853,36 @@ function runLoading(){
   let n=0; const dots=document.getElementById('loadDots');
   const dt=setInterval(()=>{ n=(n+1)%4; dots.textContent='.'.repeat(n); },400);
 
-  // 情绪流程：无需识别，固定时长后出报告
+  // 情绪流程：文件名可判定则优先（演示图 100% 准），否则 GLM 识别
   if(currentFlow==='emotion'){
-    setTimeout(()=>{ clearInterval(dt); renderEmotion(); }, 3200);
+    const minD=new Promise(r=>setTimeout(r,3000));
+    let recog;
+    const byName=emotionByFilename(scanFileName);
+    if(scanFileName==='__sample__'){
+      recog=Promise.resolve(currentEmotion);      // 示例图已确定
+    }else if(byName){
+      recog=Promise.resolve(byName);              // 文件名含"正向/负向"等 -> 直接用，不依赖AI
+    }else{
+      recog=glmEmotion(scanImageData)
+        .then(t=> t || 'positive')
+        .catch(err=>{ console.warn('GLM 情绪识别失败，回退：',err); return 'positive'; });
+    }
+    Promise.all([recog,minD]).then(([t])=>{ clearInterval(dt); currentEmotion=t||'positive'; renderEmotion(); });
     return;
   }
 
-  // 健康流程：GLM 真实识别 与 加载动画 并行，两者都完成后出报告
+  // 健康流程：文件名可判定则优先（演示图 100% 准），否则 GLM 识别，最后哈希兜底
   const minDelay=new Promise(r=>setTimeout(r,3000)); // 保证动画至少播 3s
   let recognize;
+  const caseByName=matchByFilename(scanFileName);
   if(scanFileName==='__sample__'){
-    recognize=Promise.resolve(currentCase); // 示例图已确定，跳过AI
+    recognize=Promise.resolve(currentCase);         // 示例图已确定，跳过AI
+  }else if(caseByName){
+    recognize=Promise.resolve(caseByName);          // 文件名含病症关键词 -> 直接用
   }else{
     recognize=glmClassify(scanImageData)
-      .then(key=>{
-        if(key){ return key; }                                   // AI 命中
-        return resolveCase(scanImageData, scanFileName);         // AI 返回 other -> 文件名/哈希兜底
-      })
-      .catch(err=>{
-        console.warn('GLM 识别失败，回退兜底：', err);
-        return resolveCase(scanImageData, scanFileName);         // 网络/接口异常 -> 兜底
-      });
+      .then(key=> key || hashToCase(scanImageData)) // AI 命中用AI，other则哈希兜底
+      .catch(err=>{ console.warn('GLM 识别失败，回退兜底：', err); return hashToCase(scanImageData); });
   }
   Promise.all([recognize, minDelay]).then(([key])=>{
     clearInterval(dt);
@@ -878,13 +967,22 @@ function sendChat(){
 /* ===================== 情绪雷达图 ===================== */
 function renderEmotion(){
   const e=EMOTION_DB;
-  drawRadar('radar', e.labels, e.values);
-  document.getElementById('emoMood').textContent=e.mood;
-  document.getElementById('emoAct').textContent=e.act;
+  const d=e[currentEmotion] || e.positive;
+  drawRadar('radar', e.labels, d.values, currentEmotion);
+  document.getElementById('emoMood').textContent=d.mood;
+  document.getElementById('emoAct').textContent=d.act;
+  // 顶部情绪标识
+  const tag=document.getElementById('emoTag');
+  if(tag){
+    if(currentEmotion==='negative'){ tag.textContent='😟 负向情绪 · 需要关注'; tag.style.color='#f04438'; }
+    else{ tag.textContent='😺 正向情绪 · 状态良好'; tag.style.color='#12b76a'; }
+  }
   show('emotion');
 }
-function drawRadar(id,labels,values){
+function drawRadar(id,labels,values,tone){
   const svg=document.getElementById(id);
+  const fill = tone==='negative' ? 'rgba(240,68,56,.45)' : 'rgba(255,199,0,.55)';
+  const stroke = tone==='negative' ? '#f04438' : '#f5a300';
   const cx=150, cy=140, R=95, N=labels.length;
   const ang=i=>(-90 + i*360/N)*Math.PI/180;
   const pt=(i,r)=>[cx+r*Math.cos(ang(i)), cy+r*Math.sin(ang(i))];
@@ -898,8 +996,8 @@ function drawRadar(id,labels,values){
   for(let i=0;i<N;i++){const[x,y]=pt(i,R);s+=`<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(120,90,0,.18)"/>`;}
   // 数据多边形
   let dp=''; for(let i=0;i<N;i++){const[x,y]=pt(i,R*values[i]/100);dp+=(i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1);} dp+='Z';
-  s+=`<path d="${dp}" fill="rgba(255,199,0,.55)" stroke="#f5a300" stroke-width="2.5"/>`;
-  for(let i=0;i<N;i++){const[x,y]=pt(i,R*values[i]/100);s+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="#f5a300"/>`;}
+  s+=`<path d="${dp}" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>`;
+  for(let i=0;i<N;i++){const[x,y]=pt(i,R*values[i]/100);s+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="${stroke}"/>`;}
   // 标签
   for(let i=0;i<N;i++){
     const[x,y]=pt(i,R+22);
