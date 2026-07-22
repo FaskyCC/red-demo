@@ -413,7 +413,7 @@
     </div>
     <div class="src-opt" onclick="chooseSource('demo')">
       <div class="src-ic">✨</div>
-      <div class="src-tx"><div class="st">使用示例图片</div><div class="ss">4 张真实病例，点选体验不同诊断</div></div>
+      <div class="src-tx"><div class="st">使用示例图片</div><div class="ss" id="demoSrcDesc">4 张真实病例，点选体验不同诊断</div></div>
       <div class="src-ar">›</div>
     </div>
     <button class="btn btn-ghost" style="width:100%;margin-top:6px;" onclick="closeSource()">取消</button>
@@ -629,6 +629,7 @@ function goHome(){ show('home'); }
 function startFlow(flow){
   currentFlow=flow;
   document.getElementById('sourceTitle').textContent = flow==='emotion' ? '给毛孩子拍张照，读懂它的情绪' : '给毛孩子的问题部位拍张照';
+  document.getElementById('demoSrcDesc').textContent = flow==='emotion' ? '3 张情绪样例，点选体验正向/负向' : '4 张真实病例，点选体验不同诊断';
   document.getElementById('sourceMask').classList.add('show');
 }
 function closeSource(){ document.getElementById('sourceMask').classList.remove('show'); }
