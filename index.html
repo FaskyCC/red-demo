@@ -189,14 +189,14 @@
   .upload-hint{font-size:11px;color:var(--sub);margin-top:6px;}
 
   /* 相机弹层 */
-  .cam-mask{position:fixed;inset:0;background:#000;z-index:120;display:none;flex-direction:column;}
-  .cam-mask.show{display:flex;}
-  .cam-mask video{flex:1;object-fit:cover;width:100%;}
-  .cam-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:16px;color:#fff;z-index:2;}
+  .cam-mask{position:fixed;inset:0;background:#000;z-index:120;display:none;}
+  .cam-mask.show{display:block;}
+  .cam-mask video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .cam-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:16px;color:#fff;z-index:3;padding-top:calc(16px + env(safe-area-inset-top));}
   .cam-top span{font-size:16px;cursor:pointer;background:rgba(0,0,0,.4);width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
-  .cam-bar{padding:24px;display:flex;justify-content:center;align-items:center;gap:40px;background:#000;position:relative;}
-  .shutter{width:70px;height:70px;border-radius:50%;background:#fff;border:5px solid rgba(255,255,255,.4);cursor:pointer;}
-  .cam-scan-frame{position:absolute;inset:20% 12%;border:2px solid rgba(255,255,255,.6);border-radius:16px;pointer-events:none;}
+  .cam-bar{position:absolute;left:0;right:0;bottom:0;padding:20px 24px calc(24px + env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:center;gap:40px;background:linear-gradient(to top,rgba(0,0,0,.6),transparent);z-index:3;}
+  .shutter{width:70px;height:70px;border-radius:50%;background:#fff;border:5px solid rgba(255,255,255,.4);cursor:pointer;flex:0 0 auto;}
+  .cam-scan-frame{position:absolute;inset:20% 12%;border:2px solid rgba(255,255,255,.6);border-radius:16px;pointer-events:none;z-index:2;}
 
   .toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:rgba(20,20,40,.9);color:#fff;padding:11px 20px;border-radius:24px;font-size:13px;z-index:200;opacity:0;transition:.25s;pointer-events:none;white-space:nowrap;}
   .toast.show{opacity:1;bottom:94px;}
