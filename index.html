@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>摄像头调用 Demo</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #111;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 18px;
+    margin: 8px 0 16px;
+    text-align: center;
+  }
+  .video-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    aspect-ratio: 3 / 4;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #333;
+  }
+  video, canvas, #photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  #photo { display: none; background: #000; }
+  .hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    font-size: 14px;
+    padding: 20px;
+    text-align: center;
+  }
+  .controls {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+    justify-content: center;
+  }
+  button {
+    flex: 1 1 auto;
+    min-width: 100px;
+    padding: 12px 16px;
+    font-size: 14px;
+    border: none;
+    border-radius: 8px;
+    background: #2d7dfd;
+    color: #fff;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  button:active { opacity: 0.7; }
+  button:disabled {
+    background: #444;
+    color: #888;
+    cursor: not-allowed;
+  }
+  button.secondary { background: #333; }
+  button.danger { background: #d64545; }
+  .status {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #999;
+    max-width: 480px;
+    text-align: center;
+    word-break: break-all;
+  }
+  a#download {
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+  <h1>📷 摄像头调用 Demo</h1>
+
+  <div class="video-wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <img id="photo" alt="拍摄的照片">
+    <div class="hint" id="hint">点击下方"打开摄像头"开始</div>
+  </div>
+
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <div class="controls">
+    <button id="startBtn">打开摄像头</button>
+    <button id="switchBtn" class="secondary" disabled>切换前/后摄像头</button>
+    <button id="captureBtn" class="secondary" disabled>拍照</button>
+    <button id="retakeBtn" class="secondary" style="display:none;">重新拍摄</button>
+    <button id="downloadBtn" class="secondary" style="display:none;">下载照片</button>
+    <button id="stopBtn" class="danger" disabled>关闭摄像头</button>
+  </div>
+
+  <div class="status" id="status"></div>
+  <a id="download" download="photo.png"></a>
+
+<script>
+(function () {
+  const video = document.getElementById('video');
+  const photo = document.getElementById('photo');
+  const canvas = document.getElementById('canvas');
+  const hint = document.getElementById('hint');
+  const statusEl = document.getElementById('status');
+
+  const startBtn = document.getElementById('startBtn');
+  const switchBtn = document.getElementById('switchBtn');
+  const captureBtn = document.getElementById('captureBtn');
+  const retakeBtn = document.getElementById('retakeBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const downloadLink = document.getElementById('download');
+
+  let currentStream = null;
+  let facingMode = 'user'; // 'user' 前置, 'environment' 后置
+  let lastPhotoDataUrl = null;
+
+  function setStatus(msg) {
+    statusEl.textContent = msg || '';
+  }
+
+  function isSecureContextOk() {
+    // getUserMedia 要求 https 或 localhost
+    return window.isSecureContext;
+  }
+
+  async function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setStatus('当前浏览器不支持 getUserMedia API');
+      return;
+    }
+    if (!isSecureContextOk()) {
+      setStatus('警告：当前不是安全上下文（非 HTTPS/localhost），摄像头大概率无法调用');
+    }
+
+    stopCamera(); // 先关掉已有的流
+
+    const constraints = {
+      video: { facingMode: { ideal: facingMode } },
+      audio: false
+    };
+
+    try {
+      setStatus('正在请求摄像头权限...');
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      currentStream = stream;
+      video.srcObject = stream;
+      hint.style.display = 'none';
+      video.style.display = 'block';
+      photo.style.display = 'none';
+
+      switchBtn.disabled = false;
+      captureBtn.disabled = false;
+      stopBtn.disabled = false;
+      startBtn.textContent = '重新打开';
+      retakeBtn.style.display = 'none';
+      downloadBtn.style.display = 'none';
+
+      setStatus('摄像头已开启（' + (facingMode === 'user' ? '前置' : '后置') + '）');
+    } catch (err) {
+      console.error(err);
+      setStatus('打开摄像头失败：' + err.name + ' - ' + err.message);
+    }
+  }
+
+  function stopCamera() {
+    if (currentStream) {
+      currentStream.getTracks().forEach(track => track.stop());
+      currentStream = null;
+    }
+  }
+
+  function fullyStop() {
+    stopCamera();
+    video.srcObject = null;
+    video.style.display = 'none';
+    photo.style.display = 'none';
+    hint.style.display = 'flex';
+    hint.textContent = '点击下方"打开摄像头"开始';
+
+    switchBtn.disabled = true;
+    captureBtn.disabled = true;
+    stopBtn.disabled = true;
+    startBtn.textContent = '打开摄像头';
+    retakeBtn.style.display = 'none';
+    downloadBtn.style.display = 'none';
+    setStatus('摄像头已关闭');
+  }
+
+  function switchCamera() {
+    facingMode = facingMode === 'user' ? 'environment' : 'user';
+    startCamera();
+  }
+
+  function capturePhoto() {
+    if (!currentStream) return;
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    // 前置摄像头拍出来的照片默认是镜像的，这里保持和预览一致做镜像翻转
+    if (facingMode === 'user') {
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(video, 0, 0, w, h);
+
+    lastPhotoDataUrl = canvas.toDataURL('image/png');
+    photo.src = lastPhotoDataUrl;
+    photo.style.display = 'block';
+    video.style.display = 'none';
+
+    retakeBtn.style.display = 'inline-block';
+    downloadBtn.style.display = 'inline-block';
+    setStatus('拍照完成，可下载或重新拍摄');
+  }
+
+  function retake() {
+    photo.style.display = 'none';
+    video.style.display = 'block';
+    retakeBtn.style.display = 'none';
+    downloadBtn.style.display = 'none';
+    setStatus('已返回预览');
+  }
+
+  function downloadPhoto() {
+    if (!lastPhotoDataUrl) return;
+    downloadLink.href = lastPhotoDataUrl;
+    downloadLink.download = 'photo-' + Date.now() + '.png';
+    downloadLink.click();
+  }
+
+  startBtn.addEventListener('click', startCamera);
+  switchBtn.addEventListener('click', switchCamera);
+  captureBtn.addEventListener('click', capturePhoto);
+  retakeBtn.addEventListener('click', retake);
+  downloadBtn.addEventListener('click', downloadPhoto);
+  stopBtn.addEventListener('click', fullyStop);
+
+  // 页面卸载时释放摄像头
+  window.addEventListener('beforeunload', stopCamera);
+
+  // 初始提示
+  if (!isSecureContextOk()) {
+    setStatus('提示：当前页面非 HTTPS/localhost，摄像头可能无法调用');
+  }
+})();
+</script>
+
+</body>
+</html>
