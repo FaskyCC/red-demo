@@ -648,14 +648,33 @@ function pickSample(key){
   runLoading();
 }
 
-/* ---- 方案B：用户图片 -> 稳定映射到 4 种病例之一 ---- */
+/* ---- 方案B：用户图片 -> 病例 ----
+   优先按文件名关键词精准匹配（演示用的4张原图文件名即病症名），
+   匹配不到再用图片内容哈希稳定兜底。 */
+const NAME_MAP = [
+  {key:'ear',   kw:['耳螨','耳','ear','mite']},
+  {key:'teeth', kw:['牙结石','牙','口腔','teeth','tooth','dental']},
+  {key:'skin',  kw:['猫癣','猫藓','癣','藓','皮肤','皮','skin','fungus']},
+  {key:'eye',   kw:['结膜炎','眼','目','eye','conjunc']},
+];
+function matchByFilename(name){
+  if(!name) return null;
+  const n=name.toLowerCase();
+  for(const m of NAME_MAP){
+    if(m.kw.some(k=>n.includes(k.toLowerCase()))) return m.key;
+  }
+  return null;
+}
 function hashToCase(dataUrl){
-  // 对 dataURL 做简单字符串哈希，保证同一张图永远得到同一结果
   let h=5381;
   const s=dataUrl||'';
-  const step=Math.max(1, Math.floor(s.length/4096)); // 采样，避免超大字符串太慢
+  const step=Math.max(1, Math.floor(s.length/4096));
   for(let i=0;i<s.length;i+=step){ h=((h<<5)+h+s.charCodeAt(i))>>>0; }
   return CASE_KEYS[h % CASE_KEYS.length];
+}
+// 综合判定：文件名优先，其次哈希
+function resolveCase(dataUrl, filename){
+  return matchByFilename(filename) || hashToCase(dataUrl);
 }
 async function openCam(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ toast('设备不支持摄像头，请改用上传'); document.getElementById('scanFile').click(); return; }
@@ -684,10 +703,11 @@ function doShot(){
 }
 function onScanFile(e){
   const f=e.target.files[0]; if(!f){return;}
+  const fname=f.name||'';
   const r=new FileReader();
   r.onload=ev=>{
     scanImageData=ev.target.result; e.target.value='';
-    if(currentFlow==='health'){ currentCase=hashToCase(scanImageData); } // 方案B
+    if(currentFlow==='health'){ currentCase=resolveCase(scanImageData, fname); } // 文件名优先+哈希兜底
     runLoading();
   };
   r.readAsDataURL(f);
