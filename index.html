@@ -734,10 +734,12 @@ function resolveCase(dataUrl, filename){
   return matchByFilename(filename) || hashToCase(dataUrl);
 }
 
-/* ---- GLM-4.6V-Flash 真实图像识别 ----
-   注意：Demo 演示用途，API Key 直接写在前端，勿对外扩散链接。 */
-const GLM_KEY='5fee5f0cbc954f7b8d8b3fbca9575f0a.NbB4zIVxQ8QY2Ip7';
-const GLM_URL='https://open.bigmodel.cn/api/paas/v4/chat/completions';
+/* ---- Claude (Bedrock 网关) 真实图像识别 ----
+   注意：Demo 演示用途，API Key 直接写在前端，勿对外扩散链接。
+   ⚠️ 网关 maas.devops.rednote.life 通常仅公司内网/VPN 可访问；按 token 计费。 */
+const CLAUDE_KEY='MAASbfc41846900d42419ab366825a60abb4';
+const CLAUDE_MODEL='global.anthropic.claude-opus-4-7';
+const CLAUDE_URL='https://maas.devops.rednote.life/cowork/model/'+CLAUDE_MODEL+'/invoke';
 
 // 图片压缩：把任意 dataURL 缩到最长边 <=maxSide，jpeg 输出，显著减小体积、加快识别
 function compressImage(dataUrl, maxSide=720, quality=0.82){
@@ -760,16 +762,20 @@ function compressImage(dataUrl, maxSide=720, quality=0.82){
   });
 }
 
-// 通用 GLM 图片提问
+// 通用 Claude 图片提问（Bedrock invoke 格式）
 async function glmAsk(dataUrl, prompt){
-  const resp=await fetch(GLM_URL,{
+  // 从 dataURL 提取纯 base64 与 media_type
+  let mediaType='image/jpeg', b64=dataUrl;
+  const m=/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/.exec(dataUrl||'');
+  if(m){ mediaType=m[1]; b64=m[2]; }
+  const resp=await fetch(CLAUDE_URL,{
     method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+GLM_KEY},
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+CLAUDE_KEY},
     body:JSON.stringify({
-      model:'glm-4.6v-flash',
-      thinking:{type:'disabled'},
+      anthropic_version:'bedrock-2023-05-31',
+      max_tokens:50,
       messages:[{role:'user',content:[
-        {type:'image_url',image_url:{url:dataUrl}},
+        {type:'image',source:{type:'base64',media_type:mediaType,data:b64}},
         {type:'text',text:prompt},
       ]}],
     }),
@@ -779,7 +785,7 @@ async function glmAsk(dataUrl, prompt){
     throw new Error('AI 服务异常（HTTP '+resp.status+'）');
   }
   const j=await resp.json();
-  return (j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||'');
+  return (j.content&&j.content[0]&&j.content[0].text||'');
 }
 
 async function glmClassify(dataUrl){
@@ -882,7 +888,7 @@ function runLoading(){
       recog=Promise.resolve(byName);              // 文件名含"正向/负向"等 -> 直接用，不依赖AI
     }else{
       console.log('[Pi-Pet] 调用 GLM AI 情绪识别中… scanFileName=', JSON.stringify(scanFileName));
-      setBubbleStatus('🤖 正在调用 GLM AI 分析情绪…');
+      setBubbleStatus('🤖 正在调用 Claude AI 分析情绪…');
       recog=glmEmotion(scanImageData)
         .then(t=>{ console.log('[Pi-Pet] GLM 情绪返回:', t); return t || 'positive'; })
         .catch(err=>{ console.error('[Pi-Pet] GLM 情绪识别失败：',err); return {__error:err.message||'AI 调用失败'}; });
@@ -907,7 +913,7 @@ function runLoading(){
     recognize=Promise.resolve(caseByName);          // 文件名含病症关键词 -> 直接用
   }else{
     console.log('[Pi-Pet] 调用 GLM AI 识别中… scanFileName=', JSON.stringify(scanFileName));
-    setBubbleStatus('🤖 正在调用 GLM AI 识别…');
+    setBubbleStatus('🤖 正在调用 Claude AI 识别…');
     recognize=glmClassify(scanImageData)
       .then(key=>{
         console.log('[Pi-Pet] GLM 返回:', key);
